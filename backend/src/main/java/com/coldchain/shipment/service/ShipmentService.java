@@ -1,6 +1,7 @@
 package com.coldchain.shipment.service;
 
 import com.coldchain.common.DevShipperProvider;
+import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.DuplicateResourceException;
 import com.coldchain.common.error.ResourceNotFoundException;
 import com.coldchain.common.error.SemanticInvalidException;
@@ -10,17 +11,11 @@ import com.coldchain.shipment.dto.ShipmentCreateRequest;
 import com.coldchain.shipment.dto.ShipmentResponse;
 import com.coldchain.shipment.repository.ShipmentRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
-import org.locationtech.jts.geom.GeometryFactory;
-import org.locationtech.jts.geom.Point;
-import org.locationtech.jts.geom.PrecisionModel;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 @Service
 public class ShipmentService {
-
-    private static final int WGS84_SRID = 4326;
-    private static final GeometryFactory GEOMETRY_FACTORY = new GeometryFactory(new PrecisionModel(), WGS84_SRID);
 
     private final ShipmentRepository shipmentRepository;
     private final TrackerRepository trackerRepository;
@@ -46,9 +41,9 @@ public class ShipmentService {
                 devShipperProvider.shipperId(),
                 request.trackerId(),
                 request.productName(),
-                toPoint(request.origin().lon(), request.origin().lat()),
+                GeoPoints.of(request.origin().lat(), request.origin().lon()),
                 request.origin().name(),
-                toPoint(request.destination().lon(), request.destination().lat()),
+                GeoPoints.of(request.destination().lat(), request.destination().lon()),
                 request.destination().name(),
                 request.consignee() != null ? request.consignee().name() : null,
                 request.consignee() != null ? request.consignee().contact() : null,
@@ -70,9 +65,5 @@ public class ShipmentService {
         }
 
         return new ShipmentResponse(shipment.getId(), shipment.getStatus());
-    }
-
-    private static Point toPoint(double lon, double lat) {
-        return GEOMETRY_FACTORY.createPoint(new org.locationtech.jts.geom.Coordinate(lon, lat));
     }
 }

@@ -28,6 +28,16 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.UNPROCESSABLE_ENTITY, "SEMANTIC_INVALID", ex.getMessage());
     }
 
+    @ExceptionHandler(DeviceKeyUnauthorizedException.class)
+    public ProblemDetail handleDeviceKeyUnauthorized(DeviceKeyUnauthorizedException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
+    }
+
+    @ExceptionHandler(OutOfOrderConflictException.class)
+    public ProblemDetail handleOutOfOrderConflict(OutOfOrderConflictException ex) {
+        return problem(HttpStatus.CONFLICT, "READING_OUT_OF_ORDER", ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidationFailed(MethodArgumentNotValidException ex) {
         ProblemDetail detail = problem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "요청 필드 검증에 실패했습니다.");
