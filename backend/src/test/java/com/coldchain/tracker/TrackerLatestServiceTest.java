@@ -12,6 +12,7 @@ import com.coldchain.tracker.service.TrackerLatestService;
 import com.coldchain.tracker.service.TrackerLatestUpsertOutcome;
 import java.math.BigDecimal;
 import java.time.Instant;
+import java.time.temporal.ChronoUnit;
 import java.util.concurrent.Callable;
 import java.util.concurrent.CountDownLatch;
 import java.util.concurrent.ExecutorService;
@@ -48,7 +49,7 @@ class TrackerLatestServiceTest {
     @Test
     void firstReadingCreatesTrackerLatest() {
         String trackerId = givenTracker("TRK-LATEST-001");
-        Instant recordedAt = Instant.now();
+        Instant recordedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
         TrackerLatestUpsertOutcome outcome = trackerLatestService.upsert(
                 trackerId, recordedAt, new BigDecimal("5.5"), GeoPoints.of(37.5, 127.0));
@@ -62,7 +63,7 @@ class TrackerLatestServiceTest {
     @Test
     void outOfOrderReadingDoesNotOverwriteNewerState() {
         String trackerId = givenTracker("TRK-LATEST-002");
-        Instant newer = Instant.now();
+        Instant newer = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Instant older = newer.minusSeconds(60);
 
         trackerLatestService.upsert(trackerId, newer, new BigDecimal("6.0"), GeoPoints.of(37.5, 127.0));
@@ -78,7 +79,7 @@ class TrackerLatestServiceTest {
     @Test
     void concurrentUpdatesOnExistingRowResolveToNewestReadingWithoutConflict() throws Exception {
         String trackerId = givenTracker("TRK-LATEST-003");
-        Instant seed = Instant.now().minusSeconds(120);
+        Instant seed = Instant.now().truncatedTo(ChronoUnit.MICROS).minusSeconds(120);
         trackerLatestService.upsert(trackerId, seed, new BigDecimal("4.0"), GeoPoints.of(37.0, 127.0));
 
         Instant older = seed.plusSeconds(10);
@@ -97,7 +98,7 @@ class TrackerLatestServiceTest {
     @Test
     void concurrentFirstReadingsForNewTrackerResolveWithoutDuplicateKeyError() throws Exception {
         String trackerId = givenTracker("TRK-LATEST-004");
-        Instant base = Instant.now();
+        Instant base = Instant.now().truncatedTo(ChronoUnit.MICROS);
         Instant older = base;
         Instant newer = base.plusSeconds(10);
 

@@ -17,12 +17,14 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * @Transactional을 의도적으로 붙이지 않는다 — 이유는 IngestControllerTest 상단 주석 참고
+ * (tracker_latest upsert의 REQUIRES_NEW가 테스트 트랜잭션에 감싸인 미커밋 tracker를 못 봄).
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-@Transactional
 class TrackerQueryControllerTest {
 
     @Autowired

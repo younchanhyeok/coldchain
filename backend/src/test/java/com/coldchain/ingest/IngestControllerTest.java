@@ -16,12 +16,17 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.context.annotation.Import;
 import org.springframework.http.MediaType;
 import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.transaction.annotation.Transactional;
 
+/**
+ * 이 클래스는 의도적으로 @Transactional을 붙이지 않는다. tracker_latest upsert가
+ * REQUIRES_NEW로 별도 트랜잭션(별도 커넥션)에서 실행되는데, 테스트 전체를 하나의
+ * 트랜잭션으로 감싸면 그 안에서 등록한 tracker가 아직 커밋되지 않아 REQUIRES_NEW
+ * 트랜잭션에서는 보이지 않게 되어(FK 위반) 실제로는 통과해야 할 케이스가 실패한다.
+ * 각 테스트는 유니크한 trackerId를 쓰므로 커밋 방식이어도 서로 간섭하지 않는다.
+ */
 @SpringBootTest
 @AutoConfigureMockMvc
 @Import(TestcontainersConfiguration.class)
-@Transactional
 class IngestControllerTest {
 
     @Autowired
