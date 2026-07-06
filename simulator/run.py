@@ -23,8 +23,8 @@ def make_tracker_id(run_stamp: str, index: int) -> str:
 def register_trackers(client: TrackerClient, count: int, profile_name: str, threshold: float,
                        waypoints) -> list[dict]:
     run_stamp = f"{int(time.time())}{uuid.uuid4().hex[:4]}"
-    origin = {"lat": waypoints[0].lat, "lon": waypoints[0].lon, "name": "출발지"}
-    destination = {"lat": waypoints[-1].lat, "lon": waypoints[-1].lon, "name": "도착지"}
+    origin = {"lat": waypoints[0].lat, "lon": waypoints[0].lon, "name": "성남 물류센터"}
+    destination = {"lat": waypoints[-1].lat, "lon": waypoints[-1].lon, "name": "서울대병원 약제부"}
 
     trackers = []
     for i in range(count):
