@@ -1,18 +1,27 @@
 @import "tailwindcss";
+@import "pretendard/dist/web/variable/pretendardvariable.css";
 
+/* 값 출처: .claude/skills/ui-styling, .claude/skills/design-system (단일 진실) */
 @theme {
   --color-body: #000000;
   --color-sidebar: #050505;
   --color-header: #090909;
-  --color-card: #171717;
-  --color-card-hover: #1c1c1f;
-  --color-border: #252525;
+  --color-card: #18181b;
+  --color-card-hover: #1d1d20;
+  --color-border: #262626;
+  --color-divider: #202020;
+  --color-table-row-hover: #1e1e1e;
   --color-primary: #5ea9ff;
   --color-warning: #f4b860;
   --color-danger: #ff6b6b;
   --color-success: #41d17d;
 
-  --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.35);
+  --radius-card: 20px;
+  --radius-control: 12px;
+  --radius-modal: 24px;
+
+  --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 16px 40px rgba(0, 0, 0, 0.28);
+  --shadow-card-hover: 0 20px 50px rgba(0, 0, 0, 0.35);
 }
 
 :root {
@@ -23,5 +32,5 @@ body {
   margin: 0;
   background-color: #000000;
   color: #e5e5e5;
-  font-family: system-ui, "Segoe UI", Roboto, sans-serif;
+  font-family: "Pretendard Variable", system-ui, "Segoe UI", Roboto, sans-serif;
 }

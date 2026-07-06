@@ -26,18 +26,18 @@ export function TopBar({ statusFilter, onStatusFilterChange, lastUpdated }: TopB
   const elapsedLabel = useElapsedLabel(lastUpdated)
 
   return (
-    <header className="flex items-center justify-between border-b border-border bg-header px-8 py-6">
+    <header className="flex h-[72px] items-center justify-between border-b border-border bg-header px-8">
       <h1 className="text-lg font-semibold text-neutral-100">화주 대시보드</h1>
       <div className="flex items-center gap-4">
         <span className="text-xs text-neutral-500">{elapsedLabel}</span>
         <span
-          className="cursor-default select-none rounded-md border border-border px-3 py-1.5 text-sm text-neutral-600"
+          className="flex h-11 cursor-default items-center rounded-control border border-border px-3 text-sm text-neutral-600 select-none"
           title="기간별 조회는 아직 지원하지 않습니다"
         >
           날짜 범위 (준비 중)
         </span>
         <select
-          className="rounded-md border border-border bg-card px-3 py-1.5 text-sm text-neutral-200"
+          className="h-11 rounded-control border border-border bg-card px-3 text-sm text-neutral-200"
           value={statusFilter}
           onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
         >

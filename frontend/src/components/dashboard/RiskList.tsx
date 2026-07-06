@@ -20,15 +20,18 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
   const risky = trackers.filter((t) => t.status === 'BREACH').sort((a, b) => overThreshold(b) - overThreshold(a))
 
   return (
-    <div className="rounded-lg border border-border bg-card p-7 shadow-card">
+    <div
+      className="rounded-card border border-border bg-card p-7 shadow-card transition-all duration-[250ms]
+        ease-out hover:border-[#333333] hover:shadow-card-hover"
+    >
       <h2 className="mb-3 text-sm font-semibold text-neutral-200">이탈 위험 화물 리스트</h2>
 
       {risky.length === 0 ? (
         <p className="text-sm text-neutral-500">현재 이탈 위험 화물이 없습니다.</p>
       ) : (
-        <table className="w-full text-left text-sm">
+        <table className="w-full text-left text-[15px]">
           <thead>
-            <tr className="text-neutral-500">
+            <tr className="text-sm text-neutral-500">
               <th className="pb-2 font-normal">화물 ID</th>
               <th className="pb-2 font-normal">노선</th>
               <th className="pb-2 font-normal">현재 온도</th>
@@ -40,8 +43,8 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
             {risky.map((t) => (
               <tr
                 key={t.trackerId}
-                className={`cursor-pointer border-t border-border hover:bg-card-hover ${
-                  t.trackerId === selectedTrackerId ? 'bg-card-hover' : ''
+                className={`h-14 cursor-pointer border-t border-divider hover:bg-table-row-hover ${
+                  t.trackerId === selectedTrackerId ? 'border-l-2 border-l-primary bg-card-hover' : 'border-l-2 border-l-transparent'
                 }`}
                 onClick={() => onSelectTracker(t.trackerId)}
               >
@@ -54,7 +57,7 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
                 </td>
                 <td className="py-2 text-neutral-400">{t.thresholdTemp.toFixed(1)}℃</td>
                 <td className="py-2">
-                  <span className="rounded bg-danger/15 px-2 py-0.5 text-xs font-medium text-danger">
+                  <span className="rounded-full bg-danger/15 px-2.5 py-1 text-xs font-medium text-danger">
                     BREACH
                   </span>
                 </td>
