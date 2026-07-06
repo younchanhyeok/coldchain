@@ -54,6 +54,9 @@ CREATE TABLE magic_link_token (
     created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- M6 TODO: TimescaleDB 전환 시 hypertable 파티셔닝 컬럼(recorded_at)이 PK에 포함되어야 함
+-- → PK를 (id, recorded_at) 복합키로 ALTER. 지금은 단일 컬럼 PK로 두어 JPA @IdClass 보일러플레이트를 피함
+-- (데이터가 적은 M6 시점에 ALTER 한 번으로 처리하는 편이 지금부터 복합키를 감당하는 것보다 총비용이 낮음)
 CREATE TABLE reading (
     id           BIGSERIAL     PRIMARY KEY,
     tracker_id   VARCHAR(32)   NOT NULL REFERENCES tracker (id),
