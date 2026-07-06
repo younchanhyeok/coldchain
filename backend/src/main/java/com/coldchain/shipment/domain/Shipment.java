@@ -100,6 +100,34 @@ public class Shipment {
         return productName;
     }
 
+    public Point getOriginPosition() {
+        return originPosition;
+    }
+
+    public String getOriginName() {
+        return originName;
+    }
+
+    public Point getDestinationPosition() {
+        return destinationPosition;
+    }
+
+    public String getDestinationName() {
+        return destinationName;
+    }
+
+    public String getConsigneeName() {
+        return consigneeName;
+    }
+
+    public String getConsigneeContact() {
+        return consigneeContact;
+    }
+
+    public String getDriverContact() {
+        return driverContact;
+    }
+
     public ShipmentStatus getStatus() {
         return status;
     }
