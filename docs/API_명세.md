@@ -1,0 +1,351 @@
+# 콜드체인 — API 명세 v1 (MVP)
+
+> 범위: MVP 전체(M0~M5). v2/v3 엔드포인트는 §9 목록만.
+> 근거 문서: `기능명세서.md`(FR/NFR), `아키텍처_스코프_로드맵.md`(D1~D3, 데이터 모델).
+> 이 문서가 구현의 계약(contract). 구현 중 변경 시 이 문서를 먼저 갱신한다.
+
+---
+
+## 1. 공통 규약
+
+### 1.1 기본
+
+| 항목 | 규약 |
+|---|---|
+| Base URL | `/api/v1` |
+| 포맷 | JSON (`application/json; charset=utf-8`) |
+| 네이밍 | JSON 필드 camelCase, 리소스 복수형(`/trackers`), enum 대문자 스네이크(`IN_TRANSIT`) |
+| 시각 | ISO-8601 UTC (`2026-07-05T03:12:45Z`). 서버 내부는 `Instant` |
+| 좌표 | WGS84. `lat`/`lon` 숫자 필드. 경로 응답만 GeoJSON |
+| ID | 서버 생성 리소스는 long ID. 트래커는 디바이스 시리얼 문자열(`TRK-0001`) |
+| 페이징 | 시계열: `from`/`to`/`limit`(기본 500, 최대 5000) + `nextBefore` 커서. 목록: `page`/`size` |
+
+### 1.2 인증 (FR-8, D2 — MVP 2역할 + 디바이스 + 어드민 API)
+
+| 주체 | 방식 | 전달 |
+|---|---|---|
+| 화주(SHIPPER) | JWT (Access 30m / Refresh 14d) | `Authorization: Bearer {jwt}` |
+| 수령기관(CONSIGNEE) | 매직링크 토큰 (계정 없음, 단일 배송 스코프) | URL path `{token}` — §6 |
+| 디바이스(시뮬레이터·ESP32) | 트래커별 디바이스 키 | `X-Device-Key: {key}` |
+| 어드민(평가지표 API 1개) | 정적 API 키 (화면은 v2) | `X-Admin-Key: {key}` |
+
+- 인가 스코핑: 화주는 **자사 shipment에 매핑된 트래커만** 조회 가능(화주–shipment–tracker–consignee 매핑으로 강제). 위반 시 `404`(존재 은닉, `403` 아님).
+- 매직링크 토큰: 발급 시 shipment 1건에 바인딩, 배송 완료 후 N일(기본 7일) 만료.
+
+### 1.3 에러 shape — RFC 7807 Problem Details
+
+모든 에러는 `application/problem+json`. Spring `ProblemDetail` 사용 + 확장 필드 `code`, `timestamp`.
+
+```json
+{
+  "type": "https://coldchain.dev/errors/reading-out-of-order",
+  "title": "Out-of-order reading rejected",
+  "status": 409,
+  "detail": "recordedAt 2026-07-05T03:10:00Z is older than latest 2026-07-05T03:12:00Z",
+  "instance": "/api/v1/trackers/TRK-0001/readings",
+  "code": "READING_OUT_OF_ORDER",
+  "timestamp": "2026-07-05T03:12:45Z"
+}
+```
+
+**공통 에러 코드:**
+
+| HTTP | code | 의미 |
+|---|---|---|
+| 400 | `VALIDATION_FAILED` | 필드 검증 실패 (확장 필드 `errors: [{field, reason}]` 포함) |
+| 401 | `UNAUTHORIZED` | 토큰 없음/만료/서명 불일치 |
+| 401 | `MAGIC_LINK_EXPIRED` | 매직링크 만료 |
+| 404 | `RESOURCE_NOT_FOUND` | 없거나 권한 밖 (스코프 위반 포함) |
+| 409 | `READING_OUT_OF_ORDER` | 최신상태 upsert 버전 충돌 (낙관적 락) — 원시 reading은 저장됨 |
+| 409 | `DUPLICATE_RESOURCE` | 중복 생성 (트래커 시리얼 등) |
+| 422 | `SEMANTIC_INVALID` | 형식은 맞으나 의미 오류 (예: 온도 -100℃) |
+| 429 | `RATE_LIMITED` | 수집 API 유량 제한 |
+| 503 | `PREDICTION_UNAVAILABLE` | 예측 서버 장애 — fallback 응답(§5.2) |
+
+### 1.4 상태 enum
+
+| enum | 값 |
+|---|---|
+| 트래커 상태 `status` | `SAFE` / `CAUTION` / `RISK` (예측 경고 활성) / `BREACH` (임계 이탈) |
+| 배송 상태 `shipmentStatus` | `READY` / `IN_TRANSIT` / `DELIVERED` |
+| 이상 유형 `anomalyType` | `SUDDEN` (급변) / `GRADUAL` (점진) |
+| 예측 상태 `predictionStatus` | `ACTIVE` / `CANCELED` (추세 완화 취소) / `INVALIDATED` (급변 이벤트로 무효화) / `EXPIRED` |
+| 알림 채널 | `SLACK` / `SSE` / `SMS`(목업) |
+
+---
+
+## 2. 인증 API
+
+### POST /api/v1/auth/login — 화주 로그인
+```json
+// req
+{ "email": "shipper@pharma.co", "password": "..." }
+// 200
+{ "accessToken": "eyJ...", "refreshToken": "eyJ...", "role": "SHIPPER", "companyName": "한국제약" }
+```
+에러: 401 `UNAUTHORIZED` (이메일/비밀번호 불일치도 동일 코드 — 계정 존재 은닉).
+
+### POST /api/v1/auth/refresh
+```json
+// req
+{ "refreshToken": "eyJ..." }
+// 200 — login과 동일 shape
+```
+
+---
+
+## 3. 수집 API (L1 — FR-1)
+
+### POST /api/v1/trackers/{trackerId}/readings
+디바이스(시뮬레이터·ESP32)가 주기 전송. 인증: `X-Device-Key`.
+
+```json
+// req
+{
+  "temperature": 5.8,
+  "lat": 37.4979,
+  "lon": 127.0276,
+  "recordedAt": "2026-07-05T03:12:40Z",
+  "seq": 1042
+}
+// 202 Accepted
+{ "accepted": true, "serverTs": "2026-07-05T03:12:45Z" }
+```
+
+- **202인 이유:** 수신 확인만 보장, 다운스트림(탐지·예측)은 비동기. M6 Kafka 전환 시에도 계약 불변 — HTTP 동기 저장(M1)→큐 발행(M6)으로 내부만 바뀜.
+- `seq`: 디바이스 단조증가 시퀀스(선택). out-of-order·중복 판정 보조.
+- 최신상태(tracker_latest) upsert는 `recordedAt`(+version) guard 낙관적 락 — 과거 데이터가 늦게 도착하면 원시 reading은 저장하되 최신상태는 갱신하지 않음(이 경우도 202. 409는 upsert 충돌 재시도 소진 시).
+- 배치 전송(선택, M6): 같은 URL에 배열 body 허용 → `207`은 쓰지 않고 `{accepted, rejected[]}` 요약 반환.
+
+에러: 401(키 불일치), 404(미등록 트래커), 422(온도 범위 -90~+60℃ 밖, 미래 recordedAt >5m).
+
+---
+
+## 4. 조회 API (화주 JWT)
+
+모든 응답은 자사 스코프로 자동 필터링.
+
+> 기능명세서 FR-8의 `GET /me/trackers`는 별도 경로 대신 **스코핑된 `GET /trackers`로 통합** — 역할에 따라 응답 범위가 달라진다는 의미는 인가 필터로 구현하고, URL은 리소스 중심으로 유지.
+
+### GET /api/v1/trackers — 활성 트래커 목록 + 최신 상태 (FR-9 대시보드 초기 로드)
+쿼리: `status`(선택), `shipmentStatus`(기본 `IN_TRANSIT`), `page`/`size`.
+```json
+// 200
+{
+  "content": [
+    {
+      "trackerId": "TRK-0001",
+      "shipmentId": 31,
+      "productName": "백신 A (2-8℃)",
+      "thresholdTemp": 8.0,
+      "status": "RISK",
+      "lastTemperature": 6.2,
+      "lastPosition": { "lat": 37.4979, "lon": 127.0276 },
+      "lastReportedAt": "2026-07-05T03:12:40Z",
+      "activePrediction": { "predictedBreachAt": "2026-07-05T03:27:00Z", "leadTimeMinutes": 14 }
+    }
+  ],
+  "page": 0, "size": 20, "totalElements": 57
+}
+```
+정렬: `RISK`/`BREACH` 우선(예측 이탈 임박 순) → 나머지 최신 보고 순. UIUX.png "위험 화물 리스트" 요구 반영.
+
+### GET /api/v1/trackers/{trackerId} — 단건 상세
+목록 항목 + `shipment` 요약(출발/도착지, 수령기관명, 상태) + `activeAnomalies[]`.
+
+### GET /api/v1/trackers/{trackerId}/readings — 온도 시계열 (차트)
+쿼리: `from`/`to`(기본 최근 6h), `limit`, `interval`(선택 — `1m`/`5m` 다운샘플, M6 Timescale 이후).
+```json
+// 200
+{
+  "trackerId": "TRK-0001",
+  "readings": [ { "ts": "2026-07-05T03:12:40Z", "temperature": 5.8, "lat": 37.4979, "lon": 127.0276 } ],
+  "nextBefore": "2026-07-05T01:00:00Z"
+}
+```
+
+### GET /api/v1/trackers/{trackerId}/anomalies — 이상 이벤트 (FR-4)
+쿼리: `from`/`to`, `type`.
+```json
+// 200
+{ "anomalies": [ { "id": 88, "ts": "2026-07-05T03:10:00Z", "type": "SUDDEN", "severity": "HIGH", "message": "3분 내 +2.1℃ 급상승", "zScore": 4.2 } ] }
+```
+
+### GET /api/v1/trackers/{trackerId}/prediction — 현재 예측 (FR-5 ★간판)
+```json
+// 200 — 활성 예측 있음
+{
+  "status": "ACTIVE",
+  "predictedBreachAt": "2026-07-05T03:27:00Z",
+  "leadTimeMinutes": 14,
+  "thresholdTemp": 8.0,
+  "slopePerMinute": 0.14,
+  "modelVersion": "v1-linear",
+  "createdAt": "2026-07-05T03:13:00Z",
+  "forecast": [ { "ts": "2026-07-05T03:15:00Z", "temperature": 6.5 } ]
+}
+// 200 — 예측 없음(안전)
+{ "status": "NONE" }
+// 503 — 예측 서버 장애 (NFR-3): Problem Details + code=PREDICTION_UNAVAILABLE
+//        단, 대시보드 UX를 위해 GET은 503 대신 { "status": "UNAVAILABLE" } 반환 (수집·조회는 무중단 원칙)
+```
+`forecast[]`: 실측 실선→예측 점선 차트용 (UIUX.png). `INVALIDATED`: 급변 이벤트 감지 시 예측 무효화 — "안전한 실패 설계"의 API 표면.
+
+### GET /api/v1/trackers/{trackerId}/track — 이동 경로 + 남은 거리 (FR-10, D1)
+```json
+// 200
+{
+  "trackerId": "TRK-0001",
+  "path": { "type": "LineString", "coordinates": [ [127.0276, 37.4979], [127.0301, 37.5012] ] },
+  "current": { "lat": 37.5012, "lon": 127.0301 },
+  "destination": { "lat": 37.5665, "lon": 126.9780, "name": "서울대병원 약제부" },
+  "remainingDistanceMeters": 8420,
+  "breachPoints": [ { "lat": 37.4990, "lon": 127.0288, "ts": "2026-07-05T02:50:00Z" } ]
+}
+```
+`path`는 PostGIS `ST_MakeLine`, `remainingDistanceMeters`는 `ST_Distance`(geography). GeoJSON 좌표 순서는 표준대로 `[lon, lat]` — 단독 좌표 객체(`lat`/`lon` 필드)와 순서가 다름에 주의.
+
+### GET /api/v1/summary — 화주 요약 통계 (FR-8 화주 뷰)
+```json
+// 200
+{ "totalShipments": 128, "inTransit": 57, "breachCount": 3, "rescuedByPrediction": 9, "avgDeliveryMinutes": 342 }
+```
+`rescuedByPrediction`: 예측 경고 후 임계 미도달로 종료된 건수 — 데모 헤드라인 수치.
+
+---
+
+## 5. 실시간 & 예측 내부 연동
+
+### 5.1 GET /api/v1/stream — SSE (FR-9)
+인증: JWT (쿼리 `?token=` 허용 — EventSource가 헤더 미지원). 화주 스코프 이벤트만 수신.
+
+| event | data (요약) | 발생 |
+|---|---|---|
+| `reading` | trackerId, temperature, lat, lon, ts, status | 새 측정값 (트래커당 최대 1건/2s로 스로틀) |
+| `anomaly` | anomalies 항목과 동일 | L2 감지 |
+| `prediction` | prediction 응답과 동일 + trackerId | 예측 생성/갱신/취소/무효화 |
+| `breach` | trackerId, temperature, thresholdTemp, ts | FR-6 임계 이탈 |
+| `heartbeat` | serverTs | 15s 간격 (연결 유지) |
+
+재연결: 표준 `Last-Event-ID` 지원은 v2. MVP는 재연결 시 REST 초기 로드로 복구(계약에 명시).
+
+### 5.2 내부: Spring → Python 예측 서버 (외부 비공개)
+`POST http://prediction:8000/internal/v1/predict`
+```json
+// req
+{
+  "trackerId": "TRK-0001",
+  "thresholdTemp": 8.0,
+  "window": [ { "ts": "...", "temperature": 5.1 } ],   // 최근 N개 (기본 30)
+  "context": { "ambientTemp": null, "remainingDistanceMeters": null }  // v2 다변량용, MVP는 null
+}
+// 200
+{ "willBreach": true, "predictedBreachAt": "...", "confidence": 0.83, "slopePerMinute": 0.14, "modelVersion": "v1-linear" }
+```
+- 타임아웃 2s, 재시도 1회, 실패 시 circuit open → 예측 스킵하고 수집·탐지는 계속 (NFR-3).
+- `context`를 처음부터 계약에 포함 → M7 다변량 확장 시 인터페이스 불변.
+
+---
+
+## 6. 수령기관 API (매직링크 — FR-8)
+
+계정·로그인 없음. 토큰이 곧 인가 스코프(shipment 1건).
+
+### GET /api/v1/track/{token} — 단일 화물 트래킹 뷰 (모바일)
+```json
+// 200
+{
+  "shipment": { "productName": "백신 A", "shipperName": "한국제약", "status": "IN_TRANSIT", "eta": "2026-07-05T04:30:00Z" },
+  "currentTemperature": 5.8,
+  "temperatureStatus": "SAFE",
+  "thresholdTemp": 8.0,
+  "position": { "lat": 37.5012, "lon": 127.0301 },
+  "remainingDistanceMeters": 8420,
+  "temperatureLog": [ { "ts": "...", "temperature": 5.1 } ]
+}
+```
+- 노출 범위 최소화: 화주 내부 통계·다른 배송·트래커ID 원문 비노출.
+- 에러: 401 `MAGIC_LINK_EXPIRED`, 404(무효 토큰).
+- 실시간: MVP는 30s 클라이언트 폴링(수령기관 뷰에 SSE 비제공 — 배관 최소 원칙).
+
+---
+
+## 7. 관리 API (M1 최소 CRUD)
+
+### POST /api/v1/trackers — 트래커 등록 (화주)
+```json
+// req
+{ "trackerId": "TRK-0001", "productName": "백신 A (2-8℃)", "thresholdTemp": 8.0 }
+// 201 — Location: /api/v1/trackers/TRK-0001
+{ "trackerId": "TRK-0001", "deviceKey": "dk_...", "createdAt": "..." }
+```
+`deviceKey`는 생성 시 1회만 노출. 409 `DUPLICATE_RESOURCE`.
+
+### POST /api/v1/shipments — 배송 생성 + 트래커 바인딩 + 매직링크 발급 (화주)
+```json
+// req
+{
+  "trackerId": "TRK-0001",
+  "productName": "백신 A (2-8℃)",
+  "origin": { "lat": 37.4979, "lon": 127.0276, "name": "성남 물류센터" },
+  "destination": { "lat": 37.5665, "lon": 126.9780, "name": "서울대병원 약제부" },
+  "consignee": { "name": "서울대병원 약제부", "contact": "02-xxx" },
+  "driverContact": "010-xxxx"   // FR-7 기사 알림 채널용 (MVP: Slack 멘션 문자열)
+}
+// 201
+{ "shipmentId": 31, "magicLink": "https://.../t/mlk_9f2...", "status": "READY" }
+```
+
+### PATCH /api/v1/shipments/{id} — 상태 전이
+```json
+// req
+{ "status": "IN_TRANSIT" }   // READY→IN_TRANSIT→DELIVERED만 허용, 위반 시 422
+```
+
+---
+
+## 8. 어드민 API (D2 — MVP는 이 1개만)
+
+### GET /api/v1/admin/metrics/prediction — 예측 평가 지표 (M4, FR-5)
+인증: `X-Admin-Key`. 쿼리: `from`/`to`, `modelVersion`.
+```json
+// 200
+{
+  "modelVersion": "v1-linear",
+  "period": { "from": "...", "to": "..." },
+  "totalPredictions": 412,
+  "truePositives": 118,        // 경고 후 실제 이탈
+  "falsePositives": 34,        // 경고 후 미이탈 (취소 포함)
+  "missedBreaches": 12,        // 경고 없이 이탈
+  "falsePositiveRate": 0.224,
+  "avgLeadTimeMinutes": 11.3,  // 이탈 몇 분 전에 경고했나
+  "medianLeadTimeMinutes": 9.0
+}
+```
+"정확도를 자랑하는 게 아니라 측정한다"의 API 표면. 어드민 화면(v2)과 M7 비교 리포트가 이 위에 얹힘.
+
+---
+
+## 9. v2/v3 예약 (명세 생략, 경로만 예약)
+
+- `GET /api/v1/events` — 알림·이벤트 이력 (FR-12)
+- `GET/PATCH /api/v1/trackers/{id}` 메타 수정, 트래커 목록 관리 확장 (FR-11)
+- `GET /api/v1/admin/**` — 어드민 대시보드 (고객사 수·시스템 지표·모델 지표 화면)
+- `GET /api/v1/shipments/{id}/report` — GDP 규제 리포트 내보내기
+- SSE `Last-Event-ID` 재전송, 수령기관 SSE
+
+---
+
+## 부록 A. FR ↔ 엔드포인트 매핑
+
+| FR | 엔드포인트 |
+|---|---|
+| FR-1 | `POST /trackers/{id}/readings` |
+| FR-4 | `GET /trackers/{id}/anomalies` + SSE `anomaly` |
+| FR-5 ★ | `GET /trackers/{id}/prediction` + SSE `prediction` + 내부 `/internal/v1/predict` + `GET /admin/metrics/prediction` |
+| FR-6 | SSE `breach` + Slack (API 표면 없음) |
+| FR-7 | Slack 웹훅 (API 표면 없음, alert 테이블 기록) |
+| FR-8 | 인증 4종 중 2역할(§1.2) + 스코핑 규칙 + `GET /track/{token}` + `GET /summary` |
+| FR-9 | `GET /stream` (SSE) + `GET /trackers` |
+| FR-10 | `GET /trackers/{id}/track` |
+| FR-11(v2 최소) | `POST /trackers`, `POST/PATCH /shipments` |
