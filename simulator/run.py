@@ -2,6 +2,7 @@
 import argparse
 import os
 import time
+import uuid
 from datetime import datetime, timezone
 
 from client import TrackerClient
@@ -12,16 +13,18 @@ SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 DEFAULT_ROUTE = os.path.join(SCRIPT_DIR, "routes", "default.csv")
 
 
-def make_tracker_id(run_stamp: int, index: int) -> str:
+def make_tracker_id(run_stamp: str, index: int) -> str:
     # 실행마다 유니크하게 생성 — 고정 순번(TRK-0001식)이면 재실행 시 전부 409(DUPLICATE_RESOURCE)가 난다.
+    # 초 단위 타임스탬프만 쓰면 여러 시뮬레이터 프로세스를 거의 동시에 띄웠을 때 충돌할 수 있어
+    # 짧은 랜덤 suffix를 덧붙인다.
     return f"TRK-{run_stamp}-{index:04d}"
 
 
 def register_trackers(client: TrackerClient, count: int, profile_name: str, threshold: float,
                        waypoints) -> list[dict]:
-    run_stamp = int(time.time())
-    origin = {"lat": waypoints[0].lat, "lon": waypoints[0].lon, "name": "출발지"}
-    destination = {"lat": waypoints[-1].lat, "lon": waypoints[-1].lon, "name": "도착지"}
+    run_stamp = f"{int(time.time())}{uuid.uuid4().hex[:4]}"
+    origin = {"lat": waypoints[0].lat, "lon": waypoints[0].lon, "name": "성남 물류센터"}
+    destination = {"lat": waypoints[-1].lat, "lon": waypoints[-1].lon, "name": "서울대병원 약제부"}
 
     trackers = []
     for i in range(count):

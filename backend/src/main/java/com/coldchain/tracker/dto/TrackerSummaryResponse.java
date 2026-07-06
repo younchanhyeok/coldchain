@@ -9,6 +9,8 @@ public record TrackerSummaryResponse(
         String trackerId,
         Long shipmentId,
         String productName,
+        String originName,
+        String destinationName,
         BigDecimal thresholdTemp,
         TrackerStatus status,
         BigDecimal lastTemperature,
