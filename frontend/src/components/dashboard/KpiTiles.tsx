@@ -67,8 +67,9 @@ function Tile({
 }) {
   return (
     <div
-      className="min-h-[180px] rounded-lg border border-border bg-card p-7 shadow-card transition-all
-        duration-[250ms] ease-out hover:-translate-y-0.5 hover:border-[#333333] hover:bg-[#1b1b1d]"
+      className="min-h-[180px] rounded-card border border-border bg-card p-7 shadow-card transition-all
+        duration-[250ms] ease-out hover:-translate-y-0.5 hover:scale-[1.01] hover:border-[#333333]
+        hover:bg-card-hover hover:shadow-card-hover"
     >
       <div className="text-sm text-neutral-400">{label}</div>
       <div className="mt-6 flex items-end justify-between gap-3">

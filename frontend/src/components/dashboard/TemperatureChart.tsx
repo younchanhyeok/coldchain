@@ -53,12 +53,15 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
   )
 
   return (
-    <div className="rounded-lg border border-border bg-card p-7 shadow-card">
+    <div
+      className="rounded-card border border-border bg-card p-7 shadow-card transition-all duration-[250ms]
+        ease-out hover:border-[#333333] hover:shadow-card-hover"
+    >
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
         <h2 className="text-sm font-semibold text-neutral-200">온도 추이 (실측)</h2>
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className="rounded-md border border-border bg-body px-2 py-1 text-sm text-neutral-200"
+            className="h-11 rounded-control border border-border bg-card px-3 text-sm text-neutral-200"
             value={selectedTrackerId ?? ''}
             onChange={(e) => onSelectTracker(e.target.value)}
           >
@@ -96,7 +99,7 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
             <XAxis dataKey="ts" stroke="#737373" fontSize={12} />
             <YAxis stroke="#737373" fontSize={12} unit="℃" />
             <Tooltip
-              contentStyle={{ background: '#171717', border: '1px solid #252525', fontSize: 12 }}
+              contentStyle={{ background: '#18181b', border: '1px solid #262626', fontSize: 12 }}
               labelStyle={{ color: '#a3a3a3' }}
             />
             <ReferenceLine
