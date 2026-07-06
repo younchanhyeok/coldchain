@@ -137,6 +137,8 @@
       "trackerId": "TRK-0001",
       "shipmentId": 31,
       "productName": "백신 A (2-8℃)",
+      "originName": "성남 물류센터",
+      "destinationName": "서울대병원 약제부",
       "thresholdTemp": 8.0,
       "status": "RISK",
       "lastTemperature": 6.2,

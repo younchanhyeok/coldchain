@@ -83,7 +83,9 @@ class TrackerQueryControllerTest {
         mockMvc.perform(get("/api/v1/trackers"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.content[?(@.trackerId=='TRK-QUERY-001')].status").value("BREACH"))
-                .andExpect(jsonPath("$.content[?(@.trackerId=='TRK-QUERY-001')].activePrediction").value((Object) null));
+                .andExpect(jsonPath("$.content[?(@.trackerId=='TRK-QUERY-001')].activePrediction").value((Object) null))
+                .andExpect(jsonPath("$.content[?(@.trackerId=='TRK-QUERY-001')].originName").value("성남 물류센터"))
+                .andExpect(jsonPath("$.content[?(@.trackerId=='TRK-QUERY-001')].destinationName").value("서울대병원 약제부"));
     }
 
     @Test

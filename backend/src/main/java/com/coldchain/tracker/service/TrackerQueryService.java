@@ -83,6 +83,8 @@ public class TrackerQueryService {
                 tracker.getId(),
                 shipment != null ? shipment.getId() : null,
                 tracker.getProductName(),
+                shipment != null ? shipment.getOriginName() : null,
+                shipment != null ? shipment.getDestinationName() : null,
                 tracker.getThresholdTemp(),
                 status,
                 latest != null ? latest.getLastTemp() : null,
