@@ -53,12 +53,12 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
   )
 
   return (
-    <div className="rounded-lg border border-slate-800 bg-slate-900 p-4">
+    <div className="rounded-lg border border-border bg-card p-7 shadow-card">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
-        <h2 className="text-sm font-semibold text-slate-200">온도 추이 (실측)</h2>
+        <h2 className="text-sm font-semibold text-neutral-200">온도 추이 (실측)</h2>
         <div className="flex flex-wrap items-center gap-2">
           <select
-            className="rounded-md border border-slate-700 bg-slate-950 px-2 py-1 text-sm text-slate-200"
+            className="rounded-md border border-border bg-body px-2 py-1 text-sm text-neutral-200"
             value={selectedTrackerId ?? ''}
             onChange={(e) => onSelectTracker(e.target.value)}
           >
@@ -74,7 +74,7 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
                 key={opt.hours}
                 type="button"
                 className={`rounded-md px-2 py-1 text-xs ${
-                  rangeHours === opt.hours ? 'bg-blue-600/30 text-blue-300' : 'text-slate-500 hover:bg-slate-800'
+                  rangeHours === opt.hours ? 'bg-primary/20 text-primary' : 'text-neutral-500 hover:bg-card-hover'
                 }`}
                 onClick={() => setRangeHours(opt.hours)}
               >
@@ -86,31 +86,31 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
       </div>
 
       {!selectedTracker ? (
-        <p className="text-sm text-slate-500">트래커를 선택하세요.</p>
+        <p className="text-sm text-neutral-500">트래커를 선택하세요.</p>
       ) : chartData.length === 0 ? (
-        <p className="text-sm text-slate-500">선택한 구간에 데이터가 없습니다.</p>
+        <p className="text-sm text-neutral-500">선택한 구간에 데이터가 없습니다.</p>
       ) : (
         <ResponsiveContainer width="100%" height={280}>
           <LineChart data={chartData}>
-            <CartesianGrid strokeDasharray="3 3" stroke="#1e293b" />
-            <XAxis dataKey="ts" stroke="#64748b" fontSize={12} />
-            <YAxis stroke="#64748b" fontSize={12} unit="℃" />
+            <CartesianGrid strokeDasharray="3 3" stroke="#1d1d1d" />
+            <XAxis dataKey="ts" stroke="#737373" fontSize={12} />
+            <YAxis stroke="#737373" fontSize={12} unit="℃" />
             <Tooltip
-              contentStyle={{ background: '#0f172a', border: '1px solid #1e293b', fontSize: 12 }}
-              labelStyle={{ color: '#94a3b8' }}
+              contentStyle={{ background: '#171717', border: '1px solid #252525', fontSize: 12 }}
+              labelStyle={{ color: '#a3a3a3' }}
             />
             <ReferenceLine
               y={selectedTracker.thresholdTemp}
-              stroke="#f87171"
+              stroke="#ff6b6b"
               strokeDasharray="4 4"
               label={{
                 value: `임계 ${selectedTracker.thresholdTemp}℃`,
-                fill: '#f87171',
+                fill: '#ff6b6b',
                 fontSize: 11,
                 position: 'insideTopRight',
               }}
             />
-            <Line type="monotone" dataKey="temperature" name="실측" stroke="#38bdf8" strokeWidth={2} dot={false} />
+            <Line type="monotone" dataKey="temperature" name="실측" stroke="#5ea9ff" strokeWidth={2} dot={false} />
           </LineChart>
         </ResponsiveContainer>
       )}

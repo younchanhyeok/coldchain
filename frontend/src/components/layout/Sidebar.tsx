@@ -10,8 +10,8 @@ const NAV_ITEMS = [
 
 export function Sidebar() {
   return (
-    <aside className="flex w-56 shrink-0 flex-col border-r border-slate-800 bg-slate-950">
-      <div className="px-4 py-5 text-lg font-semibold tracking-tight text-slate-100">
+    <aside className="flex w-56 shrink-0 flex-col border-r border-border bg-sidebar">
+      <div className="px-4 py-5 text-lg font-semibold tracking-tight text-neutral-100">
         ❄ ColdChain
       </div>
       <nav className="flex-1 px-2">
@@ -19,7 +19,7 @@ export function Sidebar() {
           {NAV_ITEMS.map((item) =>
             item.active ? (
               <li key={item.label}>
-                <span className="block rounded-md bg-blue-600/20 px-3 py-2 text-sm font-medium text-blue-400">
+                <span className="block rounded-md bg-primary/15 px-3 py-2 text-sm text-primary">
                   {item.label}
                 </span>
               </li>
@@ -27,7 +27,7 @@ export function Sidebar() {
               <li key={item.label}>
                 {/* 아직 만들어지지 않은 화면 — 클릭 동작 자체가 없다(버튼/링크가 아닌 span) */}
                 <span
-                  className="block cursor-default select-none rounded-md px-3 py-2 text-sm text-slate-600"
+                  className="block cursor-default select-none rounded-md px-3 py-2 text-sm text-neutral-600"
                   title="아직 준비되지 않은 화면입니다"
                 >
                   {item.label}
@@ -37,9 +37,7 @@ export function Sidebar() {
           )}
         </ul>
       </nav>
-      <div className="border-t border-slate-800 px-4 py-3 text-xs text-slate-500">
-        개발용 화주
-      </div>
+      <div className="border-t border-border px-4 py-3 text-xs text-neutral-500">개발용 화주</div>
     </aside>
   )
 }

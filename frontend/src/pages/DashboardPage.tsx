@@ -1,14 +1,13 @@
 import { useEffect, useState } from 'react'
-import { getTrackers } from '../api/trackers'
-import type { StatusFilter } from '../components/layout/TopBar'
 import { KpiTiles } from '../components/dashboard/KpiTiles'
 import { RiskList } from '../components/dashboard/RiskList'
 import { TemperatureChart } from '../components/dashboard/TemperatureChart'
-import { usePolling } from '../hooks/usePolling'
 import type { TrackerSummary } from '../types/tracker'
 
 interface DashboardPageProps {
-  statusFilter: StatusFilter
+  trackers: TrackerSummary[]
+  loading: boolean
+  error: Error | null
 }
 
 function pickDefaultTracker(trackers: TrackerSummary[]): string | null {
@@ -21,14 +20,7 @@ function pickDefaultTracker(trackers: TrackerSummary[]): string | null {
   return mostOverThreshold.trackerId
 }
 
-export function DashboardPage({ statusFilter }: DashboardPageProps) {
-  const { data, error, loading } = usePolling(
-    () => getTrackers({ status: statusFilter || undefined, size: 100 }),
-    30_000,
-    [statusFilter],
-  )
-
-  const trackers = data?.content ?? []
+export function DashboardPage({ trackers, loading, error }: DashboardPageProps) {
   const [selectedTrackerId, setSelectedTrackerId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -38,12 +30,12 @@ export function DashboardPage({ statusFilter }: DashboardPageProps) {
     })
   }, [trackers])
 
-  if (loading && !data) {
-    return <div className="text-slate-500">불러오는 중...</div>
+  if (loading && trackers.length === 0) {
+    return <div className="text-neutral-500">불러오는 중...</div>
   }
 
   if (error) {
-    return <div className="text-red-400">데이터를 불러오지 못했습니다: {error.message}</div>
+    return <div className="text-danger">데이터를 불러오지 못했습니다: {error.message}</div>
   }
 
   return (

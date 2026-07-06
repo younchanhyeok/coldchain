@@ -1,12 +1,27 @@
 @import "tailwindcss";
 
+@theme {
+  --color-body: #000000;
+  --color-sidebar: #050505;
+  --color-header: #090909;
+  --color-card: #171717;
+  --color-card-hover: #1c1c1f;
+  --color-border: #252525;
+  --color-primary: #5ea9ff;
+  --color-warning: #f4b860;
+  --color-danger: #ff6b6b;
+  --color-success: #41d17d;
+
+  --shadow-card: 0 0 0 1px rgba(255, 255, 255, 0.03), 0 12px 40px rgba(0, 0, 0, 0.35);
+}
+
 :root {
   color-scheme: dark;
 }
 
 body {
   margin: 0;
-  background-color: #020617; /* slate-950 */
-  color: #e2e8f0; /* slate-200 */
+  background-color: #000000;
+  color: #e5e5e5;
   font-family: system-ui, "Segoe UI", Roboto, sans-serif;
 }

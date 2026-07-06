@@ -4,6 +4,7 @@ interface PollingResult<T> {
   data: T | null
   error: Error | null
   loading: boolean
+  updatedAt: Date | null
 }
 
 /**
@@ -18,6 +19,7 @@ export function usePolling<T>(
   const [data, setData] = useState<T | null>(null)
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
+  const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const fetchFnRef = useRef(fetchFn)
   fetchFnRef.current = fetchFn
 
@@ -30,6 +32,7 @@ export function usePolling<T>(
         if (!cancelled) {
           setData(result)
           setError(null)
+          setUpdatedAt(new Date())
         }
       } catch (err) {
         if (!cancelled) {
@@ -52,5 +55,5 @@ export function usePolling<T>(
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, deps)
 
-  return { data, error, loading }
+  return { data, error, loading, updatedAt }
 }
