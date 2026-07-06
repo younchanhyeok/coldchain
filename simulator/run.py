@@ -1,0 +1,89 @@
+#!/usr/bin/env python3
+import argparse
+import os
+import time
+from datetime import datetime, timezone
+
+from client import TrackerClient
+from profiles import PROFILES
+from route import interpolate, load_route
+
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+DEFAULT_ROUTE = os.path.join(SCRIPT_DIR, "routes", "default.csv")
+
+
+def make_tracker_id(run_stamp: int, index: int) -> str:
+    # 실행마다 유니크하게 생성 — 고정 순번(TRK-0001식)이면 재실행 시 전부 409(DUPLICATE_RESOURCE)가 난다.
+    return f"TRK-{run_stamp}-{index:04d}"
+
+
+def register_trackers(client: TrackerClient, count: int, profile_name: str, threshold: float,
+                       waypoints) -> list[dict]:
+    run_stamp = int(time.time())
+    origin = {"lat": waypoints[0].lat, "lon": waypoints[0].lon, "name": "출발지"}
+    destination = {"lat": waypoints[-1].lat, "lon": waypoints[-1].lon, "name": "도착지"}
+
+    trackers = []
+    for i in range(count):
+        tracker_id = make_tracker_id(run_stamp, i)
+        product_name = f"백신 A ({profile_name})"
+
+        registration = client.register_tracker(tracker_id, product_name, threshold)
+        shipment = client.create_shipment(tracker_id, product_name, origin, destination)
+        client.transition_shipment(shipment["shipmentId"], "IN_TRANSIT")
+
+        trackers.append({
+            "trackerId": tracker_id,
+            "deviceKey": registration["deviceKey"],
+            "profile": PROFILES[profile_name](),
+            "seq": 0,
+            "startTime": time.monotonic(),
+        })
+        print(f"[등록완료] {tracker_id}")
+
+    return trackers
+
+
+def run_loop(client: TrackerClient, trackers: list[dict], waypoints, interval: float, route_seconds: float):
+    try:
+        while True:
+            for t in trackers:
+                elapsed = time.monotonic() - t["startTime"]
+                temperature = t["profile"].step(elapsed, interval)
+                progress = min(elapsed / route_seconds, 1.0) if route_seconds > 0 else 1.0
+                lat, lon = interpolate(waypoints, progress)
+                t["seq"] += 1
+                recorded_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
+
+                response = client.send_reading(
+                    t["trackerId"], t["deviceKey"], temperature, lat, lon, recorded_at, t["seq"])
+                marker = "OK" if response.status_code == 202 else f"ERR({response.status_code})"
+                print(f"{t['trackerId']} temp={temperature:6.2f} seq={t['seq']:4d} {marker}")
+
+            time.sleep(interval)
+    except KeyboardInterrupt:
+        print("\n중단됨")
+
+
+def main():
+    parser = argparse.ArgumentParser(description="콜드체인 IoT 트래커 시뮬레이터")
+    parser.add_argument("--trackers", type=int, default=5, help="가상 트래커 개수")
+    parser.add_argument("--interval", type=float, default=5.0, help="전송 주기(초)")
+    parser.add_argument("--profile", choices=PROFILES.keys(), default="normal")
+    parser.add_argument("--target", default="http://localhost:8080", help="백엔드 base URL")
+    parser.add_argument("--route", default=DEFAULT_ROUTE, help="경로 CSV 경로 (lat,lon 컬럼)")
+    parser.add_argument("--route-minutes", type=float, default=30.0, help="경로 전체를 주파하는 데 걸리는 시간(분)")
+    parser.add_argument("--threshold", type=float, default=8.0, help="임계 온도(℃)")
+    args = parser.parse_args()
+
+    waypoints = load_route(args.route)
+    client = TrackerClient(args.target)
+
+    trackers = register_trackers(client, args.trackers, args.profile, args.threshold, waypoints)
+    print(f"\n{len(trackers)}개 트래커 등록 완료 — {args.interval}초 주기로 전송 시작 (Ctrl+C로 중단)\n")
+
+    run_loop(client, trackers, waypoints, args.interval, args.route_minutes * 60)
+
+
+if __name__ == "__main__":
+    main()
