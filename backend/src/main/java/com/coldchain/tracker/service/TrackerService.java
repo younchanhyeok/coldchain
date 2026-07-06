@@ -11,6 +11,7 @@ import java.security.NoSuchAlgorithmException;
 import java.security.SecureRandom;
 import java.nio.charset.StandardCharsets;
 import java.util.HexFormat;
+import org.springframework.dao.DataIntegrityViolationException;
 import org.springframework.stereotype.Service;
 
 /**
@@ -42,7 +43,14 @@ public class TrackerService {
                 request.productName(),
                 request.thresholdTemp(),
                 hashDeviceKey(deviceKey));
-        trackerRepository.save(tracker);
+
+        try {
+            trackerRepository.save(tracker);
+        } catch (DataIntegrityViolationException e) {
+            // 위의 existsById 확인과 save 사이에 동시에 같은 트래커ID로 등록 요청이 들어온 경우(TOCTOU) —
+            // DB 유니크 제약이 잡아준 걸 깔끔한 409로 변환한다.
+            throw new DuplicateResourceException("이미 등록된 트래커입니다: " + request.trackerId());
+        }
 
         return new TrackerRegisterResponse(tracker.getId(), deviceKey, tracker.getCreatedAt());
     }
