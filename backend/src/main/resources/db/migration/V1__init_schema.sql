@@ -31,7 +31,7 @@ CREATE TABLE tracker_latest (
 CREATE TABLE shipment (
     id                  BIGSERIAL     PRIMARY KEY,
     shipper_id          BIGINT        NOT NULL REFERENCES app_user (id),
-    tracker_id          VARCHAR(32)   NOT NULL UNIQUE REFERENCES tracker (id),
+    tracker_id          VARCHAR(32)   NOT NULL REFERENCES tracker (id),
     product_name        VARCHAR(255)  NOT NULL,
     origin_position     GEOMETRY(Point, 4326),
     origin_name         VARCHAR(255),
@@ -44,6 +44,8 @@ CREATE TABLE shipment (
     created_at          TIMESTAMPTZ   NOT NULL DEFAULT now()
 );
 CREATE INDEX idx_shipment_shipper_id ON shipment (shipper_id);
+-- 진행 중(READY/IN_TRANSIT)인 배송은 트래커당 1건만 허용 — DELIVERED 이후엔 같은 트래커를 다음 배송에 재사용(회수·재배치) 가능해야 함
+CREATE UNIQUE INDEX uq_shipment_active_tracker ON shipment (tracker_id) WHERE status <> 'DELIVERED';
 
 CREATE TABLE magic_link_token (
     token       VARCHAR(64) PRIMARY KEY,
