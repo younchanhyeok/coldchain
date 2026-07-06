@@ -1,7 +1,7 @@
 # 콜드체인 — API 명세 v1 (MVP)
 
 > 범위: MVP 전체(M0~M5). v2/v3 엔드포인트는 §9 목록만.
-> 근거 문서: `기능명세서.md`(FR/NFR), `아키텍처_스코프_로드맵.md`(D1~D3, 데이터 모델).
+> FR/NFR ID는 내부 기능명세 기준. D1~D3은 스코프 결정 사항(공간 MVP 승격 / MVP 2역할 / 로컬 compose 배포).
 > 이 문서가 구현의 계약(contract). 구현 중 변경 시 이 문서를 먼저 갱신한다.
 
 ---
@@ -171,7 +171,7 @@
 { "anomalies": [ { "id": 88, "ts": "2026-07-05T03:10:00Z", "type": "SUDDEN", "severity": "HIGH", "message": "3분 내 +2.1℃ 급상승", "zScore": 4.2 } ] }
 ```
 
-### GET /api/v1/trackers/{trackerId}/prediction — 현재 예측 (FR-5 ★간판)
+### GET /api/v1/trackers/{trackerId}/prediction — 현재 예측 (FR-5 ★핵심)
 ```json
 // 200 — 활성 예측 있음
 {
@@ -266,7 +266,7 @@
 ```
 - 노출 범위 최소화: 화주 내부 통계·다른 배송·트래커ID 원문 비노출.
 - 에러: 401 `MAGIC_LINK_EXPIRED`, 404(무효 토큰).
-- 실시간: MVP는 30s 클라이언트 폴링(수령기관 뷰에 SSE 비제공 — 배관 최소 원칙).
+- 실시간: MVP는 30s 클라이언트 폴링 — 수령기관 뷰는 단일 화물 조회라 SSE 인프라를 확장할 이유가 없음(YAGNI).
 
 ---
 
