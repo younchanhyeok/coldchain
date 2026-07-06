@@ -72,6 +72,7 @@ com.coldchain
 - 수집 API는 `202 Accepted` (다운스트림 비동기 계약 — M6 Kafka 전환에도 불변).
 - 테스트: 도메인 로직 단위 테스트 + 인가 스코핑은 반드시 테스트로 증명. Testcontainers로 PG/PostGIS 통합 테스트.
 - 커밋: Conventional Commits (`feat:`, `fix:`, `test:`, `docs:` …), 마일스톤 태그 `m0`, `m1` ….
+- 브랜치: `main` 단일 + 기능 단위 `feat/...` 브랜치에서 작업 후 merge. **main에 직접 커밋하지 않는다** (docs 등 사소한 변경 제외).
 
 ## 로컬 실행 / 빌드 / 테스트 (M0에서 확정, 목표 계약)
 
