@@ -8,13 +8,13 @@ import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.domain.ShipmentStatus;
 import com.coldchain.shipment.repository.ShipmentRepository;
 import com.coldchain.tracker.domain.Tracker;
-import com.coldchain.tracker.dto.BreachPointResponse;
 import com.coldchain.tracker.dto.GeoJsonLineString;
 import com.coldchain.tracker.dto.NamedPositionResponse;
 import com.coldchain.tracker.dto.PositionResponse;
 import com.coldchain.tracker.dto.TrackResponse;
 import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
+import java.math.BigDecimal;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -61,11 +61,7 @@ public class TrackService {
                 .map(r -> List.of(GeoPoints.lon(r.getPosition()), GeoPoints.lat(r.getPosition())))
                 .toList());
 
-        List<BreachPointResponse> breachPoints = chronological.stream()
-                .filter(r -> r.getPosition() != null)
-                .filter(r -> r.getTemperature().compareTo(tracker.getThresholdTemp()) > 0)
-                .map(r -> new BreachPointResponse(GeoPoints.lat(r.getPosition()), GeoPoints.lon(r.getPosition()), r.getRecordedAt()))
-                .toList();
+        List<GeoJsonLineString> breachSegments = buildBreachSegments(chronological, tracker.getThresholdTemp());
 
         PositionResponse current = trackerLatestRepository.findById(trackerId)
                 .map(latest -> latest.getLastPosition())
@@ -81,7 +77,35 @@ public class TrackService {
                 ? distanceMeters(current, shipment.getDestinationPosition())
                 : null;
 
-        return new TrackResponse(trackerId, path, current, destination, remainingDistanceMeters, breachPoints);
+        return new TrackResponse(trackerId, path, current, destination, remainingDistanceMeters, breachSegments);
+    }
+
+    /**
+     * 시간순 리딩을 순회하며 "연속으로 임계 초과"인 구간만 묶어 LineString 목록으로 반환한다.
+     * 개별 초과 지점(점)이 아니라 경로상의 초과 구간을 강조하기 위함 — 정상 리딩이 하나라도
+     * 끼면 구간이 끊긴다.
+     */
+    private List<GeoJsonLineString> buildBreachSegments(List<Reading> chronological, BigDecimal thresholdTemp) {
+        List<GeoJsonLineString> segments = new ArrayList<>();
+        List<List<Double>> currentSegment = new ArrayList<>();
+
+        for (Reading reading : chronological) {
+            if (reading.getPosition() == null) {
+                continue;
+            }
+            boolean overThreshold = reading.getTemperature().compareTo(thresholdTemp) > 0;
+            if (overThreshold) {
+                currentSegment.add(List.of(GeoPoints.lon(reading.getPosition()), GeoPoints.lat(reading.getPosition())));
+            } else if (!currentSegment.isEmpty()) {
+                segments.add(GeoJsonLineString.of(currentSegment));
+                currentSegment = new ArrayList<>();
+            }
+        }
+        if (!currentSegment.isEmpty()) {
+            segments.add(GeoJsonLineString.of(currentSegment));
+        }
+
+        return segments;
     }
 
     private Double distanceMeters(PositionResponse current, Point destination) {

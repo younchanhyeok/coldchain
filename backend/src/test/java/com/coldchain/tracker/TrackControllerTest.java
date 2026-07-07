@@ -104,16 +104,18 @@ class TrackControllerTest {
     }
 
     @Test
-    void breachPointsOnlyIncludeReadingsOverThreshold() throws Exception {
+    void breachSegmentsOnlyIncludeConsecutiveReadingsOverThreshold() throws Exception {
         TrackerRegisterResponse tracker = registerTracker("TRK-TRACK-003");
         createAndStartShipment(tracker.trackerId());
 
         sendReading(tracker.trackerId(), tracker.deviceKey(), 5.0, 37.42, 127.12); // 임계(8.0) 이하
-        sendReading(tracker.trackerId(), tracker.deviceKey(), 12.0, 37.45, 127.10); // 임계 초과
+        sendReading(tracker.trackerId(), tracker.deviceKey(), 12.0, 37.45, 127.10); // 초과 시작
+        sendReading(tracker.trackerId(), tracker.deviceKey(), 13.0, 37.46, 127.09); // 초과 지속(같은 구간)
 
         mockMvc.perform(get("/api/v1/trackers/{id}/track", tracker.trackerId()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.breachPoints.length()").value(1))
-                .andExpect(jsonPath("$.breachPoints[0].lat").value(37.45));
+                .andExpect(jsonPath("$.breachSegments.length()").value(1))
+                .andExpect(jsonPath("$.breachSegments[0].type").value("LineString"))
+                .andExpect(jsonPath("$.breachSegments[0].coordinates.length()").value(2));
     }
 }

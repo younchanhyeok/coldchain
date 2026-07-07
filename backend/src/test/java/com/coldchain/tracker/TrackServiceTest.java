@@ -38,9 +38,7 @@ class TrackServiceTest {
     @Autowired
     private ReadingRepository readingRepository;
 
-    @Test
-    void pathIsCappedAtFiveHundredMostRecentPoints() {
-        String trackerId = "TRK-TRACK-LIMIT";
+    private Shipment givenTrackerWithActiveShipment(String trackerId) {
         trackerRepository.save(new Tracker(trackerId, 1L, "백신 A", new BigDecimal("8.0"), "hash"));
 
         Shipment shipment = new Shipment(
@@ -52,6 +50,13 @@ class TrackServiceTest {
         shipmentRepository.flush();
         shipment.transitionTo(ShipmentStatus.IN_TRANSIT);
         shipmentRepository.save(shipment);
+        return shipment;
+    }
+
+    @Test
+    void pathIsCappedAtFiveHundredMostRecentPoints() {
+        String trackerId = "TRK-TRACK-LIMIT";
+        Shipment shipment = givenTrackerWithActiveShipment(trackerId);
 
         // 리딩은 반드시 배송 생성 시각 이후여야 한다 — TrackService가 이번 배송 기간으로 필터링한다.
         Instant base = shipment.getCreatedAt().plusSeconds(1);
@@ -70,5 +75,28 @@ class TrackServiceTest {
         assertThat(track.path().coordinates().get(499).get(1)).isEqualTo(37.42 + 599 * 0.0001);
         // 가장 오래된 리딩(i=0)은 500개 제한에 밀려 포함되지 않는다
         assertThat(track.path().coordinates().get(0).get(1)).isEqualTo(37.42 + 100 * 0.0001);
+    }
+
+    @Test
+    void groupsConsecutiveOverThresholdReadingsIntoSeparateSegments() {
+        String trackerId = "TRK-TRACK-SEGMENTS";
+        Shipment shipment = givenTrackerWithActiveShipment(trackerId);
+        Instant base = shipment.getCreatedAt().plusSeconds(1);
+
+        // 정상 → 초과(구간1 시작) → 초과(구간1 지속) → 정상 → 초과(구간2)
+        readingRepository.saveAll(List.of(
+                new Reading(trackerId, base, new BigDecimal("5.0"), GeoPoints.of(37.420, 127.12)),
+                new Reading(trackerId, base.plusSeconds(1), new BigDecimal("9.0"), GeoPoints.of(37.421, 127.12)),
+                new Reading(trackerId, base.plusSeconds(2), new BigDecimal("9.5"), GeoPoints.of(37.422, 127.12)),
+                new Reading(trackerId, base.plusSeconds(3), new BigDecimal("5.0"), GeoPoints.of(37.423, 127.12)),
+                new Reading(trackerId, base.plusSeconds(4), new BigDecimal("10.0"), GeoPoints.of(37.424, 127.12))));
+
+        TrackResponse track = trackService.getTrack(trackerId);
+
+        assertThat(track.breachSegments()).hasSize(2);
+        assertThat(track.breachSegments().get(0).coordinates()).hasSize(2); // 초과 2연속
+        assertThat(track.breachSegments().get(1).coordinates()).hasSize(1); // 초과 1건, 정상으로 끊김
+        assertThat(track.breachSegments().get(0).coordinates().get(0).get(1)).isEqualTo(37.421);
+        assertThat(track.breachSegments().get(1).coordinates().get(0).get(1)).isEqualTo(37.424);
     }
 }
