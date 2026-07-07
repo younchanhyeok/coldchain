@@ -1,5 +1,6 @@
 package com.coldchain.detection;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -7,10 +8,14 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
 import com.coldchain.TestcontainersConfiguration;
+import com.coldchain.detection.domain.AnomalyEvent;
+import com.coldchain.detection.domain.AnomalyType;
+import com.coldchain.detection.repository.AnomalyEventRepository;
 import com.coldchain.tracker.dto.TrackerRegisterResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -29,6 +34,9 @@ class AnomalyControllerTest {
 
     @Autowired
     private ObjectMapper objectMapper;
+
+    @Autowired
+    private AnomalyEventRepository anomalyEventRepository;
 
     private String registerTracker(String trackerId) throws Exception {
         String body = mockMvc.perform(post("/api/v1/trackers")
@@ -70,20 +78,24 @@ class AnomalyControllerTest {
         sendReading(trackerId, deviceKey, 5.0, base.plusSeconds(40));
         sendReading(trackerId, deviceKey, 9.0, base.plusSeconds(50)); // SUDDEN 활성화
 
-        // 조회 상한은 Instant.now()가 아니라 base 기준 고정 미래 시각을 쓴다 — 테스트 실행은
-        // 순식간이라 실제 시계가 시뮬레이션한 리딩 간격(초 단위)을 못 따라잡기 때문이다.
-        // type=SUDDEN으로 한정한다 — 5→9 급등은 윈도우 전체로 보면 상승 추세이기도 해서 GRADUAL도
-        // 부가적으로 활성화될 수 있다(정상 동작, 이 테스트의 관심사는 SUDDEN 하나뿐).
-        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
-                mockMvc.perform(get("/api/v1/trackers/{id}/anomalies", trackerId)
-                                .param("from", base.minusSeconds(1).toString())
-                                .param("to", base.plusSeconds(3600).toString())
-                                .param("type", "SUDDEN"))
-                        .andExpect(status().isOk())
-                        .andExpect(jsonPath("$.anomalies.length()").value(1))
-                        .andExpect(jsonPath("$.anomalies[0].type").value("SUDDEN"))
-                        .andExpect(jsonPath("$.anomalies[0].severity").value("HIGH"))
-                        .andExpect(jsonPath("$.anomalies[0].status").value("ACTIVE")));
+        // 먼저 리포지토리로 실제 감지가 끝났는지 확인한다(AnomalyDetectionIntegrationTest에서
+        // 이미 검증된 신뢰 가능한 대기 방식) — HTTP GET을 반복 폴링하는 대신, 데이터가 갖춰진 뒤
+        // 컨트롤러 계약(JSON 응답 shape)만 단발성으로 확인한다.
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            List<AnomalyEvent> events = anomalyEventRepository.findByTrackerIdAndTypeAndTsBetweenOrderByTsDesc(
+                    trackerId, AnomalyType.SUDDEN, base.minusSeconds(1), base.plusSeconds(3600));
+            assertThat(events).as("events=%s", events).hasSize(1);
+        });
+
+        mockMvc.perform(get("/api/v1/trackers/{id}/anomalies", trackerId)
+                        .param("from", base.minusSeconds(1).toString())
+                        .param("to", base.plusSeconds(3600).toString())
+                        .param("type", "SUDDEN"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.anomalies.length()").value(1))
+                .andExpect(jsonPath("$.anomalies[0].type").value("SUDDEN"))
+                .andExpect(jsonPath("$.anomalies[0].severity").value("HIGH"))
+                .andExpect(jsonPath("$.anomalies[0].status").value("ACTIVE"));
     }
 
     @Test
