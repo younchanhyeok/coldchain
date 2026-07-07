@@ -127,4 +127,10 @@ public class AnomalyEvent {
     public Instant getClearedAt() {
         return clearedAt;
     }
+
+    @Override
+    public String toString() {
+        return "AnomalyEvent{id=%s, trackerId=%s, type=%s, status=%s, cleanStreak=%d, ts=%s, clearedAt=%s}"
+                .formatted(id, trackerId, type, status, cleanStreak, ts, clearedAt);
+    }
 }

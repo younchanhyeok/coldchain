@@ -97,7 +97,7 @@ class AnomalyDetectionIntegrationTest {
     private void awaitCleanStreak(String trackerId, Instant base, int expectedStreak) {
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
             List<AnomalyEvent> events = findAll(trackerId, base);
-            assertThat(events).hasSize(1);
+            assertThat(events).as("events=%s", events).hasSize(1);
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
             assertThat(events.get(0).getCleanStreak()).isEqualTo(expectedStreak);
         });
@@ -135,7 +135,7 @@ class AnomalyDetectionIntegrationTest {
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
             List<AnomalyEvent> events = findAll(trackerId, base);
-            assertThat(events).hasSize(1);
+            assertThat(events).as("events=%s", events).hasSize(1);
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
         });
 
@@ -143,7 +143,7 @@ class AnomalyDetectionIntegrationTest {
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
             List<AnomalyEvent> events = findAll(trackerId, base);
-            assertThat(events).hasSize(1); // 여전히 1건 — 억제 확인
+            assertThat(events).as("events=%s", events).hasSize(1); // 여전히 1건 — 억제 확인
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
         });
 
@@ -155,7 +155,7 @@ class AnomalyDetectionIntegrationTest {
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
             List<AnomalyEvent> events = findAll(trackerId, base);
-            assertThat(events).hasSize(1); // 새 행이 생기지 않고 같은 행이 닫혔는지 확인
+            assertThat(events).as("events=%s", events).hasSize(1); // 새 행이 생기지 않고 같은 행이 닫혔는지 확인
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.CLEARED);
             assertThat(events.get(0).getClearedAt()).isNotNull();
         });
@@ -176,7 +176,7 @@ class AnomalyDetectionIntegrationTest {
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
             List<AnomalyEvent> events = findByType(trackerId, AnomalyType.GRADUAL, base);
-            assertThat(events).hasSize(1);
+            assertThat(events).as("events=%s", events).hasSize(1);
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
         });
     }
