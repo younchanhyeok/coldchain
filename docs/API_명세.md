@@ -223,11 +223,13 @@
 
 | event | data (요약) | 발생 |
 |---|---|---|
-| `reading` | trackerId, temperature, lat, lon, ts, status | 새 측정값 (트래커당 최대 1건/2s로 스로틀) |
-| `anomaly` | anomalies 항목과 동일 | L2 감지 |
-| `prediction` | prediction 응답과 동일 + trackerId | 예측 생성/갱신/취소/무효화 |
-| `breach` | trackerId, temperature, thresholdTemp, ts | FR-6 임계 이탈 |
+| `reading` | trackerId, temperature, lat, lon, ts, status | 새 측정값 (트래커당 최대 1건/2s로 스로틀¹) |
+| `anomaly` | anomalies 항목과 동일 | L2 감지 (M3~) |
+| `prediction` | prediction 응답과 동일 + trackerId | 예측 생성/갱신/취소/무효화 (M4~) |
+| `breach` | trackerId, temperature, thresholdTemp, ts | FR-6 임계 이탈 (정상→초과 전이 시 1회만 발행) |
 | `heartbeat` | serverTs | 15s 간격 (연결 유지) |
+
+¹ 트래커당 스로틀은 M6 부하테스트 시점에 구현한다(현재는 미적용 — M2는 트래커 수가 적어 필요를 겪지 않음). `anomaly`/`prediction`은 각각 M3/M4에서 그 데이터가 생기기 전까지 발행하지 않는다.
 
 재연결: 표준 `Last-Event-ID` 지원은 v2. MVP는 재연결 시 REST 초기 로드로 복구(계약에 명시).
 

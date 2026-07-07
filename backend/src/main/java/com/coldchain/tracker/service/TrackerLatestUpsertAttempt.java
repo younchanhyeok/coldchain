@@ -25,16 +25,17 @@ class TrackerLatestUpsertAttempt {
     }
 
     @Transactional(propagation = Propagation.REQUIRES_NEW)
-    TrackerLatestUpsertOutcome execute(String trackerId, Instant recordedAt, BigDecimal temperature, Point position) {
+    TrackerLatestUpsertResult execute(String trackerId, Instant recordedAt, BigDecimal temperature, Point position) {
         TrackerLatest latest = trackerLatestRepository.findById(trackerId)
                 .orElseGet(() -> new TrackerLatest(trackerId));
 
         if (latest.getLastTs() != null && !recordedAt.isAfter(latest.getLastTs())) {
-            return TrackerLatestUpsertOutcome.OUT_OF_ORDER;
+            return new TrackerLatestUpsertResult(TrackerLatestUpsertOutcome.OUT_OF_ORDER, null);
         }
 
+        BigDecimal previousTemperature = latest.getLastTemp();
         latest.applyReading(recordedAt, temperature, position);
         trackerLatestRepository.saveAndFlush(latest);
-        return TrackerLatestUpsertOutcome.UPDATED;
+        return new TrackerLatestUpsertResult(TrackerLatestUpsertOutcome.UPDATED, previousTemperature);
     }
 }

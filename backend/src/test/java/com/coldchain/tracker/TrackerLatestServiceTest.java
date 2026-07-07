@@ -10,6 +10,7 @@ import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import com.coldchain.tracker.service.TrackerLatestService;
 import com.coldchain.tracker.service.TrackerLatestUpsertOutcome;
+import com.coldchain.tracker.service.TrackerLatestUpsertResult;
 import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
@@ -51,13 +52,28 @@ class TrackerLatestServiceTest {
         String trackerId = givenTracker("TRK-LATEST-001");
         Instant recordedAt = Instant.now().truncatedTo(ChronoUnit.MICROS);
 
-        TrackerLatestUpsertOutcome outcome = trackerLatestService.upsert(
+        TrackerLatestUpsertResult result = trackerLatestService.upsert(
                 trackerId, recordedAt, new BigDecimal("5.5"), GeoPoints.of(37.5, 127.0));
 
-        assertThat(outcome).isEqualTo(TrackerLatestUpsertOutcome.UPDATED);
+        assertThat(result.outcome()).isEqualTo(TrackerLatestUpsertOutcome.UPDATED);
+        assertThat(result.previousTemperature()).isNull();
         TrackerLatest stored = trackerLatestRepository.findById(trackerId).orElseThrow();
         assertThat(stored.getLastTs()).isEqualTo(recordedAt);
         assertThat(stored.getLastTemp()).isEqualByComparingTo("5.5");
+    }
+
+    @Test
+    void secondReadingCapturesPreviousTemperature() {
+        String trackerId = givenTracker("TRK-LATEST-005");
+        Instant first = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant second = first.plusSeconds(10);
+
+        trackerLatestService.upsert(trackerId, first, new BigDecimal("5.5"), GeoPoints.of(37.5, 127.0));
+        TrackerLatestUpsertResult result = trackerLatestService.upsert(
+                trackerId, second, new BigDecimal("9.0"), GeoPoints.of(37.5, 127.0));
+
+        assertThat(result.outcome()).isEqualTo(TrackerLatestUpsertOutcome.UPDATED);
+        assertThat(result.previousTemperature()).isEqualByComparingTo("5.5");
     }
 
     @Test
@@ -67,10 +83,10 @@ class TrackerLatestServiceTest {
         Instant older = newer.minusSeconds(60);
 
         trackerLatestService.upsert(trackerId, newer, new BigDecimal("6.0"), GeoPoints.of(37.5, 127.0));
-        TrackerLatestUpsertOutcome outcome = trackerLatestService.upsert(
+        TrackerLatestUpsertResult result = trackerLatestService.upsert(
                 trackerId, older, new BigDecimal("1.0"), GeoPoints.of(0, 0));
 
-        assertThat(outcome).isEqualTo(TrackerLatestUpsertOutcome.OUT_OF_ORDER);
+        assertThat(result.outcome()).isEqualTo(TrackerLatestUpsertOutcome.OUT_OF_ORDER);
         TrackerLatest stored = trackerLatestRepository.findById(trackerId).orElseThrow();
         assertThat(stored.getLastTs()).isEqualTo(newer);
         assertThat(stored.getLastTemp()).isEqualByComparingTo("6.0");
@@ -87,8 +103,8 @@ class TrackerLatestServiceTest {
 
         ConcurrentRaceResult result = raceTwoUpserts(trackerId, older, new BigDecimal("5.0"), newer, new BigDecimal("9.0"));
 
-        assertThat(result.outcomeA()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
-        assertThat(result.outcomeB()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
+        assertThat(result.outcomeA().outcome()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
+        assertThat(result.outcomeB().outcome()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
 
         TrackerLatest stored = trackerLatestRepository.findById(trackerId).orElseThrow();
         assertThat(stored.getLastTs()).isEqualTo(newer);
@@ -104,8 +120,8 @@ class TrackerLatestServiceTest {
 
         ConcurrentRaceResult result = raceTwoUpserts(trackerId, older, new BigDecimal("5.0"), newer, new BigDecimal("9.0"));
 
-        assertThat(result.outcomeA()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
-        assertThat(result.outcomeB()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
+        assertThat(result.outcomeA().outcome()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
+        assertThat(result.outcomeB().outcome()).isNotEqualTo(TrackerLatestUpsertOutcome.CONFLICT);
 
         TrackerLatest stored = trackerLatestRepository.findById(trackerId).orElseThrow();
         assertThat(stored.getLastTs()).isEqualTo(newer);
@@ -118,20 +134,20 @@ class TrackerLatestServiceTest {
         CountDownLatch ready = new CountDownLatch(2);
         CountDownLatch go = new CountDownLatch(1);
 
-        Callable<TrackerLatestUpsertOutcome> taskA = () -> {
+        Callable<TrackerLatestUpsertResult> taskA = () -> {
             ready.countDown();
             go.await();
             return trackerLatestService.upsert(trackerId, tsA, tempA, GeoPoints.of(37.1, 127.1));
         };
-        Callable<TrackerLatestUpsertOutcome> taskB = () -> {
+        Callable<TrackerLatestUpsertResult> taskB = () -> {
             ready.countDown();
             go.await();
             return trackerLatestService.upsert(trackerId, tsB, tempB, GeoPoints.of(37.2, 127.2));
         };
 
         try {
-            Future<TrackerLatestUpsertOutcome> futureA = executor.submit(taskA);
-            Future<TrackerLatestUpsertOutcome> futureB = executor.submit(taskB);
+            Future<TrackerLatestUpsertResult> futureA = executor.submit(taskA);
+            Future<TrackerLatestUpsertResult> futureB = executor.submit(taskB);
             ready.await();
             go.countDown();
 
@@ -143,6 +159,6 @@ class TrackerLatestServiceTest {
         }
     }
 
-    private record ConcurrentRaceResult(TrackerLatestUpsertOutcome outcomeA, TrackerLatestUpsertOutcome outcomeB) {
+    private record ConcurrentRaceResult(TrackerLatestUpsertResult outcomeA, TrackerLatestUpsertResult outcomeB) {
     }
 }

@@ -7,17 +7,20 @@ import com.coldchain.common.error.ResourceNotFoundException;
 import com.coldchain.common.error.SemanticInvalidException;
 import com.coldchain.ingest.dto.IngestAcceptedResponse;
 import com.coldchain.ingest.dto.ReadingIngestRequest;
+import com.coldchain.ingest.event.ReadingRecordedEvent;
 import com.coldchain.reading.service.ReadingService;
 import com.coldchain.tracker.domain.Tracker;
 import com.coldchain.tracker.repository.TrackerRepository;
 import com.coldchain.tracker.service.TrackerLatestService;
 import com.coldchain.tracker.service.TrackerLatestUpsertOutcome;
+import com.coldchain.tracker.service.TrackerLatestUpsertResult;
 import com.coldchain.tracker.service.TrackerService;
 import jakarta.validation.Valid;
 import java.math.BigDecimal;
 import java.time.Duration;
 import java.time.Instant;
 import org.locationtech.jts.geom.Point;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -38,12 +41,14 @@ public class IngestController {
     private final TrackerRepository trackerRepository;
     private final ReadingService readingService;
     private final TrackerLatestService trackerLatestService;
+    private final ApplicationEventPublisher eventPublisher;
 
     public IngestController(TrackerRepository trackerRepository, ReadingService readingService,
-            TrackerLatestService trackerLatestService) {
+            TrackerLatestService trackerLatestService, ApplicationEventPublisher eventPublisher) {
         this.trackerRepository = trackerRepository;
         this.readingService = readingService;
         this.trackerLatestService = trackerLatestService;
+        this.eventPublisher = eventPublisher;
     }
 
     @PostMapping
@@ -66,16 +71,31 @@ public class IngestController {
 
         readingService.save(trackerId, request.recordedAt(), temperature, position);
 
-        TrackerLatestUpsertOutcome outcome = trackerLatestService.upsert(
+        TrackerLatestUpsertResult result = trackerLatestService.upsert(
                 trackerId, request.recordedAt(), temperature, position);
 
-        if (outcome == TrackerLatestUpsertOutcome.CONFLICT) {
+        if (result.outcome() == TrackerLatestUpsertOutcome.CONFLICT) {
             throw new OutOfOrderConflictException(
                     "최신 상태 갱신 충돌로 재시도를 모두 소진했습니다: " + trackerId);
         }
 
+        if (result.outcome() == TrackerLatestUpsertOutcome.UPDATED) {
+            publishReadingRecorded(trackerId, temperature, position, request.recordedAt(), tracker.getThresholdTemp(),
+                    result.previousTemperature());
+        }
+
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new IngestAcceptedResponse(true, Instant.now()));
+    }
+
+    private void publishReadingRecorded(String trackerId, BigDecimal temperature, Point position,
+            Instant recordedAt, BigDecimal thresholdTemp, BigDecimal previousTemperature) {
+        boolean wasOverThreshold = previousTemperature != null && previousTemperature.compareTo(thresholdTemp) > 0;
+        boolean isOverThreshold = temperature.compareTo(thresholdTemp) > 0;
+        boolean justBreached = isOverThreshold && !wasOverThreshold;
+
+        eventPublisher.publishEvent(
+                new ReadingRecordedEvent(trackerId, temperature, position, recordedAt, thresholdTemp, justBreached));
     }
 
     private void validate(ReadingIngestRequest request) {
