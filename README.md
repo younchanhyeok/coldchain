@@ -6,6 +6,12 @@
 
 의약품·식품 등 콜드체인 배송은 온도가 임계값을 벗어난 **후에** 알아채면 이미 늦다. 이 프로젝트는 트래커(온도·위치) 데이터를 실시간 수집해 이상 징후를 탐지하는 것을 넘어, 현재 추세로부터 **N분 후 온도 이탈을 예측**해 문제가 벌어지기 전에 경고한다. 급변 이벤트(냉동기 고장 등)가 감지되면 예측은 즉시 무효화하고 알림으로 전환하는 안전한 실패 설계를 따른다.
 
+## 데모
+
+![데모](docs/demo.gif)
+
+*M2 완료 시점 — 시뮬레이터(정상 트래커 + 급변/sudden-failure 트래커)를 돌리면 화주 대시보드의 위험 리스트·지도 마커·온도 차트가 SSE로 실시간 갱신된다.*
+
 ## 핵심 기능
 
 - **예측(L3, 핵심)** — 최근 온도 추이를 회귀 모델에 넣어 임계 이탈 시각·리드타임을 산출, 사전 경고. 급변 이벤트 시 예측 `INVALIDATED` + 즉시 알림 전환.
@@ -49,9 +55,9 @@
 
 | # | 목표 | 완료 기준 | 상태 |
 |---|---|---|---|
-| M0 | 기반 공사 — 리포·DB 스키마 v1·docker-compose·CI | `docker compose up` 한 방에 빈 시스템 기동 | 진행 중 |
-| M1 | 최소 파이프라인 — 시뮬레이터→수집→저장→조회 | 시뮬레이터 50개 데이터가 DB에 쌓이고 API로 조회 | - |
-| M2 | 실시간 대시보드 — SSE·지도·온도 차트 | 지도 마커가 움직이고 차트가 실시간으로 흐름 | - |
+| M0 | 기반 공사 — 리포·DB 스키마 v1·docker-compose·CI | `docker compose up` 한 방에 빈 시스템 기동 | 완료 |
+| M1 | 최소 파이프라인 — 시뮬레이터→수집→저장→조회 | 시뮬레이터 50개 데이터가 DB에 쌓이고 API로 조회 | 완료 |
+| M2 | 실시간 대시보드 — SSE·지도·온도 차트 | 지도 마커가 움직이고 차트가 실시간으로 흐름 | 완료 |
 | M3 | 이상탐지(L2) — 임계+통계 탐지·Slack 알림 | 급상승 시나리오에 Slack 경고 도착 | - |
 | M4 | 예측(L3) ★핵심 — 선형회귀 예측·선제 경고·평가지표 | 예측 성능이 리드타임·오탐률 수치로 측정됨 | - |
 | M5 | 역할 멀티뷰 — JWT·매직링크·인가 스코핑 테스트 | 같은 배송을 역할별 다른 화면·범위로 조회 | - |
@@ -63,15 +69,19 @@
 ```bash
 docker compose -f infra/docker-compose.yml up -d   # PG(+PostGIS)·Redis·(M6~)Kafka
 cd backend && ./gradlew bootRun
-cd prediction && uvicorn app.main:app --port 8000
-cd frontend && npm run dev
+cd prediction && uvicorn app.main:app --port 8000   # M4~ 구현 예정, 아직 없음
+cd frontend && npm install && npm run dev            # .env.example 복사 후 VITE_KAKAO_MAP_KEY 채워야 지도가 뜸
 ```
 
-시뮬레이터:
+시뮬레이터(최초 1회 `pip install -r requirements.txt` 필요):
 
 ```bash
 cd simulator
 python run.py --trackers 50 --interval 5 --profile normal --target http://localhost:8080
+
+# 정상 트래커 + 급변(sudden-failure) 트래커를 섞어 돌리면 대시보드에서 SAFE→BREACH 실시간 전이를 볼 수 있다
+python run.py --trackers 40 --interval 5 --profile normal --target http://localhost:8080
+python run.py --trackers 10 --interval 5 --profile sudden-failure --target http://localhost:8080
 ```
 
 API 계약은 [`docs/API_명세.md`](docs/API_명세.md) 참고.
