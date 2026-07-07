@@ -89,6 +89,20 @@ class AnomalyDetectionIntegrationTest {
                 trackerId, type, base.minusSeconds(1), base.plus(QUERY_WINDOW));
     }
 
+    /**
+     * cleanStreak이 정확히 기대값에 도달할 때까지 기다린다 — sendReading의 고정 대기만으로는
+     * CI 러너 부하에 따라 비동기 처리가 늦어질 수 있어, 다음 리딩을 보내기 전에 이전 리딩이
+     * 실제로 반영됐는지 직접 확인한다(고정 sleep 값 추측 대신 결정적으로 만듦).
+     */
+    private void awaitCleanStreak(String trackerId, Instant base, int expectedStreak) {
+        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+            List<AnomalyEvent> events = findAll(trackerId, base);
+            assertThat(events).hasSize(1);
+            assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
+            assertThat(events.get(0).getCleanStreak()).isEqualTo(expectedStreak);
+        });
+    }
+
     @Test
     void fewerThanFiveReadingsNeverTriggersAnomalyRegardlessOfSpike() throws Exception {
         String trackerId = "TRK-ANOMALY-COLDSTART";
@@ -134,7 +148,9 @@ class AnomalyDetectionIntegrationTest {
         });
 
         sendReading(trackerId, deviceKey, 13.0, base.plusSeconds(70)); // cleanStreak 1
+        awaitCleanStreak(trackerId, base, 1);
         sendReading(trackerId, deviceKey, 13.0, base.plusSeconds(80)); // cleanStreak 2
+        awaitCleanStreak(trackerId, base, 2);
         sendReading(trackerId, deviceKey, 13.0, base.plusSeconds(90)); // cleanStreak 3 → CLEARED
 
         await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
