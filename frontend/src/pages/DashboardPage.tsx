@@ -44,9 +44,13 @@ export function DashboardPage({ trackers, loading, error }: DashboardPageProps) 
   return (
     <div className="flex flex-col gap-6">
       <KpiTiles trackers={trackers} />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
+      <div className="grid h-[480px] grid-cols-1 items-stretch gap-6 lg:grid-cols-[2fr_1fr]">
         <RiskList trackers={trackers} selectedTrackerId={selectedTrackerId} onSelectTracker={setSelectedTrackerId} />
-        <TrackerMap trackerId={selectedTrackerId} currentPosition={selectedTracker?.lastPosition ?? null} />
+        <TrackerMap
+          trackerId={selectedTrackerId}
+          currentPosition={selectedTracker?.lastPosition ?? null}
+          trackers={trackers}
+        />
       </div>
       <TemperatureChart
         trackers={trackers}

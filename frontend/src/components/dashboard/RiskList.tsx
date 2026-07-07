@@ -1,4 +1,5 @@
 import type { TrackerSummary } from '../../types/tracker'
+import { DashboardCard } from './DashboardCard'
 
 interface RiskListProps {
   trackers: TrackerSummary[]
@@ -19,13 +20,18 @@ function temperatureToneClass(t: TrackerSummary): string {
 export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskListProps) {
   const risky = trackers.filter((t) => t.status === 'BREACH').sort((a, b) => overThreshold(b) - overThreshold(a))
 
-  return (
-    <div
-      className="rounded-card border border-border bg-card p-7 shadow-card transition-all duration-[250ms]
-        ease-out hover:border-[#333333] hover:shadow-card-hover"
+  // 전체 화물 관리 화면은 아직 없음 — 클릭 동작 없는 span으로 명확히 구분
+  const footer = (
+    <span
+      className="inline-block cursor-default text-xs text-neutral-600 select-none"
+      title="아직 준비되지 않은 화면입니다"
     >
-      <h2 className="mb-3 text-sm font-semibold text-neutral-200">이탈 위험 화물 리스트</h2>
+      전체 보기 →
+    </span>
+  )
 
+  return (
+    <DashboardCard title="이탈 위험 화물 리스트" footer={footer} bodyClassName="overflow-y-auto px-7 pb-4">
       {risky.length === 0 ? (
         <p className="text-sm text-neutral-500">현재 이탈 위험 화물이 없습니다.</p>
       ) : (
@@ -44,7 +50,9 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
               <tr
                 key={t.trackerId}
                 className={`h-14 cursor-pointer border-t border-divider hover:bg-table-row-hover ${
-                  t.trackerId === selectedTrackerId ? 'border-l-2 border-l-primary bg-card-hover' : 'border-l-2 border-l-transparent'
+                  t.trackerId === selectedTrackerId
+                    ? 'border-l-2 border-l-primary bg-card-hover'
+                    : 'border-l-2 border-l-transparent'
                 }`}
                 onClick={() => onSelectTracker(t.trackerId)}
               >
@@ -66,14 +74,6 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
           </tbody>
         </table>
       )}
-
-      {/* 전체 화물 관리 화면은 아직 없음 — 클릭 동작 없는 span으로 명확히 구분 */}
-      <span
-        className="mt-3 inline-block cursor-default select-none text-xs text-neutral-600"
-        title="아직 준비되지 않은 화면입니다"
-      >
-        전체 보기 →
-      </span>
-    </div>
+    </DashboardCard>
   )
 }
