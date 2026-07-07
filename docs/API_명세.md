@@ -167,11 +167,16 @@
 ```
 
 ### GET /api/v1/trackers/{trackerId}/anomalies — 이상 이벤트 (FR-4)
-쿼리: `from`/`to`, `type`.
+쿼리: `from`/`to`(기본 최근 6h), `type`.
 ```json
 // 200
-{ "anomalies": [ { "id": 88, "ts": "2026-07-05T03:10:00Z", "type": "SUDDEN", "severity": "HIGH", "message": "3분 내 +2.1℃ 급상승", "zScore": 4.2 } ] }
+{
+  "anomalies": [
+    { "id": 88, "ts": "2026-07-05T03:10:00Z", "type": "SUDDEN", "severity": "HIGH", "message": "직전 대비 +23.78℃/분 변화 (z=4.2)", "zScore": 4.2, "status": "ACTIVE" }
+  ]
+}
 ```
+같은 `(trackerId, type)` 조합의 활성 이상은 동시에 최대 1건(`status=ACTIVE`) — 리딩마다 반복 감지돼도 새 행을 만들지 않고, 조건이 연속 3회 미해당이면 `CLEARED`로 닫힌다(`clearedAt` 스탬프). CAUTION 트래커 상태(`GET /trackers`)는 유형 무관하게 `ACTIVE` 이상이 하나라도 있으면 켜진다.
 
 ### GET /api/v1/trackers/{trackerId}/prediction — 현재 예측 (FR-5 ★핵심)
 ```json
@@ -226,7 +231,7 @@
 | event | data (요약) | 발생 |
 |---|---|---|
 | `reading` | trackerId, temperature, lat, lon, ts, status | 새 측정값 (트래커당 최대 1건/2s로 스로틀¹) |
-| `anomaly` | anomalies 항목과 동일 | L2 감지 (M3~) |
+| `anomaly` | anomalies 항목 + trackerId | L2 감지 — 활성화(`status=ACTIVE`)·해제(`status=CLEARED`) 전이 시에만 발행(활성 유지 중엔 반복 발행 안 함, M3~) |
 | `prediction` | prediction 응답과 동일 + trackerId | 예측 생성/갱신/취소/무효화 (M4~) |
 | `breach` | trackerId, temperature, thresholdTemp, ts | FR-6 임계 이탈 (정상→초과 전이 시 1회만 발행) |
 | `heartbeat` | serverTs | 15s 간격 (연결 유지) |
