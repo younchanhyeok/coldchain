@@ -205,7 +205,7 @@
   "breachPoints": [ { "lat": 37.4990, "lon": 127.0288, "ts": "2026-07-05T02:50:00Z" } ]
 }
 ```
-`path`는 PostGIS `ST_MakeLine`, `remainingDistanceMeters`는 `ST_Distance`(geography). GeoJSON 좌표 순서는 표준대로 `[lon, lat]` — 단독 좌표 객체(`lat`/`lon` 필드)와 순서가 다름에 주의.
+`path`는 이번 배송(진행 중 shipment) 시작 이후 리딩을 시간순으로 조립하며 **최근 500개 좌표로 제한**한다(무한정 누적 방지). `remainingDistanceMeters`는 `ST_Distance`(geography, 지구 곡률 반영 실거리). GeoJSON 좌표 순서는 표준대로 `[lon, lat]` — 단독 좌표 객체(`lat`/`lon` 필드)와 순서가 다름에 주의. `current`는 SSE 미연결 등 폴백용이며, 대시보드는 평소 `GET /stream`의 실시간 `lastPosition`을 우선 사용한다.
 
 ### GET /api/v1/summary — 화주 요약 통계 (FR-8 화주 뷰)
 ```json
