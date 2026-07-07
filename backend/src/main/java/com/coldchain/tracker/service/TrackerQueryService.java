@@ -3,6 +3,7 @@ package com.coldchain.tracker.service;
 import com.coldchain.common.DevShipperProvider;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.ResourceNotFoundException;
+import com.coldchain.detection.service.AnomalyQueryService;
 import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.domain.ShipmentStatus;
 import com.coldchain.shipment.repository.ShipmentRepository;
@@ -28,13 +29,16 @@ public class TrackerQueryService {
     private final TrackerLatestRepository trackerLatestRepository;
     private final ShipmentRepository shipmentRepository;
     private final DevShipperProvider devShipperProvider;
+    private final AnomalyQueryService anomalyQueryService;
 
     public TrackerQueryService(TrackerRepository trackerRepository, TrackerLatestRepository trackerLatestRepository,
-            ShipmentRepository shipmentRepository, DevShipperProvider devShipperProvider) {
+            ShipmentRepository shipmentRepository, DevShipperProvider devShipperProvider,
+            AnomalyQueryService anomalyQueryService) {
         this.trackerRepository = trackerRepository;
         this.trackerLatestRepository = trackerLatestRepository;
         this.shipmentRepository = shipmentRepository;
         this.devShipperProvider = devShipperProvider;
+        this.anomalyQueryService = anomalyQueryService;
     }
 
     public TrackerListResponse list(TrackerStatus statusFilter, ShipmentStatus shipmentStatus, int page, int size) {
@@ -93,13 +97,18 @@ public class TrackerQueryService {
                 null);
     }
 
-    private static TrackerStatus computeStatus(Tracker tracker, TrackerLatest latest) {
+    private TrackerStatus computeStatus(Tracker tracker, TrackerLatest latest) {
         if (latest == null || latest.getLastTemp() == null) {
             return TrackerStatus.SAFE;
         }
-        return latest.getLastTemp().compareTo(tracker.getThresholdTemp()) > 0
-                ? TrackerStatus.BREACH
-                : TrackerStatus.SAFE;
+        if (latest.getLastTemp().compareTo(tracker.getThresholdTemp()) > 0) {
+            return TrackerStatus.BREACH;
+        }
+        // CAUTION: 유형(SUDDEN/GRADUAL) 무관하게 활성 이상탐지가 있으면 "이탈은 아니지만 이상 감지됨"
+        if (anomalyQueryService.hasActiveAnomaly(tracker.getId())) {
+            return TrackerStatus.CAUTION;
+        }
+        return TrackerStatus.SAFE;
     }
 
     private static ShipmentSummary toShipmentSummary(Shipment shipment) {
