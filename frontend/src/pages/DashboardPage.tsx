@@ -2,6 +2,7 @@ import { useEffect, useState } from 'react'
 import { KpiTiles } from '../components/dashboard/KpiTiles'
 import { RiskList } from '../components/dashboard/RiskList'
 import { TemperatureChart } from '../components/dashboard/TemperatureChart'
+import { TrackerMap } from '../components/dashboard/TrackerMap'
 import type { TrackerSummary } from '../types/tracker'
 
 interface DashboardPageProps {
@@ -38,10 +39,15 @@ export function DashboardPage({ trackers, loading, error }: DashboardPageProps) 
     return <div className="text-danger">데이터를 불러오지 못했습니다: {error.message}</div>
   }
 
+  const selectedTracker = trackers.find((t) => t.trackerId === selectedTrackerId) ?? null
+
   return (
     <div className="flex flex-col gap-6">
       <KpiTiles trackers={trackers} />
-      <RiskList trackers={trackers} selectedTrackerId={selectedTrackerId} onSelectTracker={setSelectedTrackerId} />
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[2fr_1fr]">
+        <RiskList trackers={trackers} selectedTrackerId={selectedTrackerId} onSelectTracker={setSelectedTrackerId} />
+        <TrackerMap trackerId={selectedTrackerId} currentPosition={selectedTracker?.lastPosition ?? null} />
+      </div>
       <TemperatureChart
         trackers={trackers}
         selectedTrackerId={selectedTrackerId}
