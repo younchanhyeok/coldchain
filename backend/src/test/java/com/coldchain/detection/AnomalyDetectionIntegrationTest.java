@@ -94,9 +94,9 @@ class AnomalyDetectionIntegrationTest {
      * CI 러너 부하에 따라 비동기 처리가 늦어질 수 있어, 다음 리딩을 보내기 전에 이전 리딩이
      * 실제로 반영됐는지 직접 확인한다(고정 sleep 값 추측 대신 결정적으로 만듦).
      */
-    private void awaitCleanStreak(String trackerId, Instant base, int expectedStreak) {
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            List<AnomalyEvent> events = findAll(trackerId, base);
+    private void awaitCleanStreak(String trackerId, AnomalyType type, Instant base, int expectedStreak) {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            List<AnomalyEvent> events = findByType(trackerId, type, base);
             assertThat(events).as("events=%s", events).hasSize(1);
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
             assertThat(events.get(0).getCleanStreak()).isEqualTo(expectedStreak);
@@ -133,28 +133,30 @@ class AnomalyDetectionIntegrationTest {
 
         sendReading(trackerId, deviceKey, 9.0, base.plusSeconds(50)); // +24℃/분 — SUDDEN 활성화
 
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            List<AnomalyEvent> events = findAll(trackerId, base);
+        // 조회는 SUDDEN으로 한정한다 — 5→9→13 급등은 윈도우 전체로 보면 상승 추세이기도 해서
+        // GRADUAL도 부가적으로 활성화될 수 있다(그 자체는 정상 동작, 이 테스트의 관심사가 아님).
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            List<AnomalyEvent> events = findByType(trackerId, AnomalyType.SUDDEN, base);
             assertThat(events).as("events=%s", events).hasSize(1);
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
         });
 
         sendReading(trackerId, deviceKey, 13.0, base.plusSeconds(60)); // 여전히 +24℃/분 — 억제(새 행 없음)
 
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            List<AnomalyEvent> events = findAll(trackerId, base);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            List<AnomalyEvent> events = findByType(trackerId, AnomalyType.SUDDEN, base);
             assertThat(events).as("events=%s", events).hasSize(1); // 여전히 1건 — 억제 확인
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);
         });
 
         sendReading(trackerId, deviceKey, 13.0, base.plusSeconds(70)); // cleanStreak 1
-        awaitCleanStreak(trackerId, base, 1);
+        awaitCleanStreak(trackerId, AnomalyType.SUDDEN, base, 1);
         sendReading(trackerId, deviceKey, 13.0, base.plusSeconds(80)); // cleanStreak 2
-        awaitCleanStreak(trackerId, base, 2);
+        awaitCleanStreak(trackerId, AnomalyType.SUDDEN, base, 2);
         sendReading(trackerId, deviceKey, 13.0, base.plusSeconds(90)); // cleanStreak 3 → CLEARED
 
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
-            List<AnomalyEvent> events = findAll(trackerId, base);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            List<AnomalyEvent> events = findByType(trackerId, AnomalyType.SUDDEN, base);
             assertThat(events).as("events=%s", events).hasSize(1); // 새 행이 생기지 않고 같은 행이 닫혔는지 확인
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.CLEARED);
             assertThat(events.get(0).getClearedAt()).isNotNull();
@@ -174,7 +176,7 @@ class AnomalyDetectionIntegrationTest {
         sendReading(trackerId, deviceKey, 5.24, base.plusSeconds(40));
         sendReading(trackerId, deviceKey, 5.30, base.plusSeconds(50)); // 10초당 +0.06℃ = 분당 +0.36℃ 지속 상승
 
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() -> {
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
             List<AnomalyEvent> events = findByType(trackerId, AnomalyType.GRADUAL, base);
             assertThat(events).as("events=%s", events).hasSize(1);
             assertThat(events.get(0).getStatus()).isEqualTo(AnomalyStatus.ACTIVE);

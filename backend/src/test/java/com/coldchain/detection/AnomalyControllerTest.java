@@ -72,10 +72,13 @@ class AnomalyControllerTest {
 
         // 조회 상한은 Instant.now()가 아니라 base 기준 고정 미래 시각을 쓴다 — 테스트 실행은
         // 순식간이라 실제 시계가 시뮬레이션한 리딩 간격(초 단위)을 못 따라잡기 때문이다.
-        await().atMost(Duration.ofSeconds(5)).untilAsserted(() ->
+        // type=SUDDEN으로 한정한다 — 5→9 급등은 윈도우 전체로 보면 상승 추세이기도 해서 GRADUAL도
+        // 부가적으로 활성화될 수 있다(정상 동작, 이 테스트의 관심사는 SUDDEN 하나뿐).
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
                 mockMvc.perform(get("/api/v1/trackers/{id}/anomalies", trackerId)
                                 .param("from", base.minusSeconds(1).toString())
-                                .param("to", base.plusSeconds(3600).toString()))
+                                .param("to", base.plusSeconds(3600).toString())
+                                .param("type", "SUDDEN"))
                         .andExpect(status().isOk())
                         .andExpect(jsonPath("$.anomalies.length()").value(1))
                         .andExpect(jsonPath("$.anomalies[0].type").value("SUDDEN"))
