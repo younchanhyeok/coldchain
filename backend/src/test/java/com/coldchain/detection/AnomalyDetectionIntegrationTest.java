@@ -61,6 +61,12 @@ class AnomalyDetectionIntegrationTest {
         return objectMapper.readValue(body, TrackerRegisterResponse.class).deviceKey();
     }
 
+    /**
+     * 이 시나리오는 리딩을 순서대로 하나씩 처리했을 때의 상태 전이(cleanStreak 누적 등)를 검증한다.
+     * @Async 리스너는 호출 순서를 보장하지 않으므로(SimpleAsyncTaskExecutor) 각 리딩을 보낸 뒤
+     * 짧게 대기해 다음 리딩을 보내기 전에 비동기 처리가 끝나게 한다 — 실제 IoT 트래커가 보고
+     * 주기마다 하나씩 보내는 것과 같은 순서를 보장하기 위함.
+     */
     private void sendReading(String trackerId, String deviceKey, double temperature, Instant recordedAt)
             throws Exception {
         mockMvc.perform(post("/api/v1/trackers/{id}/readings", trackerId)
@@ -70,6 +76,7 @@ class AnomalyDetectionIntegrationTest {
                                 {"temperature": %s, "lat": 37.42, "lon": 127.12, "recordedAt": "%s"}
                                 """.formatted(temperature, recordedAt)))
                 .andExpect(status().isAccepted());
+        Thread.sleep(150);
     }
 
     private List<AnomalyEvent> findAll(String trackerId, Instant base) {

@@ -12,6 +12,7 @@ import java.time.Instant;
 import java.util.List;
 import java.util.Locale;
 import java.util.Optional;
+import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -34,6 +35,12 @@ public class AnomalyDetectionService {
     private final AnomalyEventRepository anomalyEventRepository;
     private final ApplicationEventPublisher eventPublisher;
 
+    // @Async 리스너는 트래커별 순서를 보장하지 않는다(SimpleAsyncTaskExecutor는 호출마다 새 스레드) —
+    // 같은 트래커의 리딩이 몰릴 때 윈도우 push나 cleanStreak 증가가 동시에 겹치면 유실될 수 있어
+    // 트래커별로 직렬화한다. 트래커 수만큼 락 객체가 쌓이지만(제거 안 함) M3 규모에선 무시할 크기 —
+    // M6 부하테스트에서 트래커 수가 커지면 재검토.
+    private final ConcurrentHashMap<String, Object> trackerLocks = new ConcurrentHashMap<>();
+
     public AnomalyDetectionService(TemperatureWindowRepository windowRepository,
             AnomalyEventRepository anomalyEventRepository, ApplicationEventPublisher eventPublisher) {
         this.windowRepository = windowRepository;
@@ -43,6 +50,13 @@ public class AnomalyDetectionService {
 
     @Transactional
     public void analyze(ReadingRecordedEvent event) {
+        Object lock = trackerLocks.computeIfAbsent(event.trackerId(), id -> new Object());
+        synchronized (lock) {
+            analyzeLocked(event);
+        }
+    }
+
+    private void analyzeLocked(ReadingRecordedEvent event) {
         WindowPoint point = new WindowPoint(event.temperature().doubleValue(), event.recordedAt().toEpochMilli());
         List<WindowPoint> window = windowRepository.pushAndGet(event.trackerId(), point);
 

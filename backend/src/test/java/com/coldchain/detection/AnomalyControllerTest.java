@@ -41,6 +41,10 @@ class AnomalyControllerTest {
         return objectMapper.readValue(body, TrackerRegisterResponse.class).deviceKey();
     }
 
+    /**
+     * @Async 리스너는 호출 순서를 보장하지 않으므로(SimpleAsyncTaskExecutor) 각 리딩 전송 후
+     * 짧게 대기해 다음 리딩 전에 비동기 처리가 끝나게 한다.
+     */
     private void sendReading(String trackerId, String deviceKey, double temperature, Instant recordedAt)
             throws Exception {
         mockMvc.perform(post("/api/v1/trackers/{id}/readings", trackerId)
@@ -50,6 +54,7 @@ class AnomalyControllerTest {
                                 {"temperature": %s, "lat": 37.42, "lon": 127.12, "recordedAt": "%s"}
                                 """.formatted(temperature, recordedAt)))
                 .andExpect(status().isAccepted());
+        Thread.sleep(150);
     }
 
     @Test
