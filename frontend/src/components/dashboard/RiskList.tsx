@@ -32,10 +32,10 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
         <table className="w-full text-left text-[15px]">
           <thead>
             <tr className="text-sm text-neutral-500">
-              <th className="pb-2 font-normal">화물 ID</th>
-              <th className="pb-2 font-normal">노선</th>
-              <th className="pb-2 font-normal">현재 온도</th>
-              <th className="pb-2 font-normal">임계값</th>
+              <th className="pr-6 pb-2 font-normal">화물 ID</th>
+              <th className="pr-6 pb-2 font-normal">노선</th>
+              <th className="pr-6 pb-2 font-normal">현재 온도</th>
+              <th className="pr-6 pb-2 font-normal">임계값</th>
               <th className="pb-2 font-normal" />
             </tr>
           </thead>
@@ -48,14 +48,14 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
                 }`}
                 onClick={() => onSelectTracker(t.trackerId)}
               >
-                <td className="py-2">{t.trackerId}</td>
-                <td className="py-2 text-neutral-400">
+                <td className="pr-6 py-2">{t.trackerId}</td>
+                <td className="pr-6 py-2 text-neutral-400">
                   {t.originName && t.destinationName ? `${t.originName} → ${t.destinationName}` : '—'}
                 </td>
-                <td className={`py-2 font-medium ${temperatureToneClass(t)}`}>
+                <td className={`pr-6 py-2 font-medium ${temperatureToneClass(t)}`}>
                   {t.lastTemperature?.toFixed(1)}℃
                 </td>
-                <td className="py-2 text-neutral-400">{t.thresholdTemp.toFixed(1)}℃</td>
+                <td className="pr-6 py-2 text-neutral-400">{t.thresholdTemp.toFixed(1)}℃</td>
                 <td className="py-2">
                   <span className="rounded-full bg-danger/15 px-2.5 py-1 text-xs font-medium text-danger">
                     BREACH
