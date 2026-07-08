@@ -56,6 +56,9 @@ public class Shipment {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "delivered_at")
+    private Instant deliveredAt;
+
     protected Shipment() {
     }
 
@@ -82,6 +85,9 @@ public class Shipment {
             throw new IllegalStateException("허용되지 않는 상태 전이: " + status + " -> " + next);
         }
         this.status = next;
+        if (next == ShipmentStatus.DELIVERED) {
+            this.deliveredAt = Instant.now();
+        }
     }
 
     public Long getId() {
@@ -134,5 +140,9 @@ public class Shipment {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getDeliveredAt() {
+        return deliveredAt;
     }
 }

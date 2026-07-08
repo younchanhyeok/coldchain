@@ -97,7 +97,8 @@ public class TrackerQueryService {
                 null);
     }
 
-    private TrackerStatus computeStatus(Tracker tracker, TrackerLatest latest) {
+    /** shipment 목록(ShipmentQueryService) 등 다른 서비스에서도 같은 판정 로직을 재사용한다. */
+    public TrackerStatus computeStatus(Tracker tracker, TrackerLatest latest) {
         if (latest == null || latest.getLastTemp() == null) {
             return TrackerStatus.SAFE;
         }

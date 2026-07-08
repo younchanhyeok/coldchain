@@ -15,6 +15,7 @@ import com.coldchain.tracker.dto.TrackResponse;
 import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import java.math.BigDecimal;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -27,6 +28,9 @@ import org.springframework.stereotype.Service;
 public class TrackService {
 
     private static final int MAX_PATH_POINTS = 500;
+    private static final int ETA_WINDOW_SIZE = 5;
+    private static final double STOPPED_SPEED_THRESHOLD_MPS = 0.1;
+    private static final double EARTH_RADIUS_METERS = 6_371_000;
 
     private final TrackerRepository trackerRepository;
     private final TrackerLatestRepository trackerLatestRepository;
@@ -77,7 +81,59 @@ public class TrackService {
                 ? distanceMeters(current, shipment.getDestinationPosition())
                 : null;
 
-        return new TrackResponse(trackerId, path, current, destination, remainingDistanceMeters, breachSegments);
+        Double etaMinutes = etaMinutes(chronological, remainingDistanceMeters);
+
+        return new TrackResponse(trackerId, path, current, destination, remainingDistanceMeters, etaMinutes,
+                breachSegments);
+    }
+
+    /**
+     * 최근 {@value #ETA_WINDOW_SIZE}개 리딩의 이동거리(각 구간 haversine 합) ÷ 경과시간 =
+     * 평균 속도, 남은 직선거리 ÷ 속도 = 도착 예상(분). 직선거리·평균속도 기반 근사치이며
+     * 실제 도로 경로 ETA가 아니다. 속도가 정지 판정 임계 이하면 null("계산 불가").
+     */
+    private Double etaMinutes(List<Reading> chronological, Double remainingDistanceMeters) {
+        if (remainingDistanceMeters == null) {
+            return null;
+        }
+
+        List<Reading> withPosition = chronological.stream().filter(r -> r.getPosition() != null).toList();
+        if (withPosition.size() < 2) {
+            return null;
+        }
+
+        List<Reading> window = withPosition.subList(
+                Math.max(0, withPosition.size() - ETA_WINDOW_SIZE), withPosition.size());
+
+        double elapsedSeconds = Duration.between(
+                window.get(0).getRecordedAt(), window.get(window.size() - 1).getRecordedAt()).getSeconds();
+        if (elapsedSeconds <= 0) {
+            return null;
+        }
+
+        double totalDistanceMeters = 0;
+        for (int i = 1; i < window.size(); i++) {
+            totalDistanceMeters += haversineMeters(window.get(i - 1).getPosition(), window.get(i).getPosition());
+        }
+
+        double speedMetersPerSecond = totalDistanceMeters / elapsedSeconds;
+        if (speedMetersPerSecond < STOPPED_SPEED_THRESHOLD_MPS) {
+            return null;
+        }
+
+        return (remainingDistanceMeters / speedMetersPerSecond) / 60.0;
+    }
+
+    private static double haversineMeters(Point a, Point b) {
+        double lat1 = Math.toRadians(GeoPoints.lat(a));
+        double lat2 = Math.toRadians(GeoPoints.lat(b));
+        double dLat = Math.toRadians(GeoPoints.lat(b) - GeoPoints.lat(a));
+        double dLon = Math.toRadians(GeoPoints.lon(b) - GeoPoints.lon(a));
+
+        double sinLat = Math.sin(dLat / 2);
+        double sinLon = Math.sin(dLon / 2);
+        double h = sinLat * sinLat + Math.cos(lat1) * Math.cos(lat2) * sinLon * sinLon;
+        return EARTH_RADIUS_METERS * 2 * Math.atan2(Math.sqrt(h), Math.sqrt(1 - h));
     }
 
     /**

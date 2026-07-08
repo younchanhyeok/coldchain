@@ -210,19 +210,47 @@
   "current": { "lat": 37.5012, "lon": 127.0301 },
   "destination": { "lat": 37.5665, "lon": 126.9780, "name": "서울대병원 약제부" },
   "remainingDistanceMeters": 8420,
+  "etaMinutes": 12.4,
   "breachSegments": [
     { "type": "LineString", "coordinates": [ [127.0288, 37.4990], [127.0290, 37.4995] ] }
   ]
 }
 ```
-`path`는 이번 배송(진행 중 shipment) 시작 이후 리딩을 시간순으로 조립하며 **최근 500개 좌표로 제한**한다(무한정 누적 방지). `remainingDistanceMeters`는 `ST_Distance`(geography, 지구 곡률 반영 실거리). GeoJSON 좌표 순서는 표준대로 `[lon, lat]` — 단독 좌표 객체(`lat`/`lon` 필드)와 순서가 다름에 주의. `current`는 SSE 미연결 등 폴백용이며, 대시보드는 평소 `GET /stream`의 실시간 `lastPosition`을 우선 사용한다. `breachSegments`는 개별 초과 지점이 아니라 **연속으로 임계 초과였던 구간**을 GeoJSON LineString으로 묶은 목록이다 — 정상 리딩이 하나라도 끼면 구간이 끊긴다(지도에서 점이 아니라 구간 강조로 표시하기 위함).
+`path`는 이번 배송(진행 중 shipment) 시작 이후 리딩을 시간순으로 조립하며 **최근 500개 좌표로 제한**한다(무한정 누적 방지). `remainingDistanceMeters`는 `ST_Distance`(geography, 지구 곡률 반영 실거리). GeoJSON 좌표 순서는 표준대로 `[lon, lat]` — 단독 좌표 객체(`lat`/`lon` 필드)와 순서가 다름에 주의. `current`는 SSE 미연결 등 폴백용이며, 대시보드는 평소 `GET /stream`의 실시간 `lastPosition`을 우선 사용한다. `breachSegments`는 개별 초과 지점이 아니라 **연속으로 임계 초과였던 구간**을 GeoJSON LineString으로 묶은 목록이다 — 정상 리딩이 하나라도 끼면 구간이 끊긴다(지도에서 점이 아니라 구간 강조로 표시하기 위함). `etaMinutes`(M3, "도착 예상")는 **최근 5개 리딩의 이동거리 ÷ 경과시간으로 낸 평균속도 기반 근사치이며 실제 도로 경로 ETA가 아니다** — 정지 중이거나 리딩이 부족하면 `null`("계산 불가"). M4 예측("N분 후 이탈")과는 다른 개념이니 라벨·의미를 혼동하지 말 것.
+
+### GET /api/v1/shipments — 화물 목록 (M3, 화물 관리 탭)
+쿼리: `page`/`size`(기본 0/20). 검색·상태 필터는 프론트 클라이언트 사이드(화면_탭_구성.md).
+```json
+// 200
+{
+  "content": [
+    {
+      "shipmentId": 31,
+      "trackerId": "TRK-0001",
+      "productName": "백신 A",
+      "originName": "성남 물류센터",
+      "destinationName": "서울대병원 약제부",
+      "shipmentStatus": "IN_TRANSIT",
+      "trackerStatus": "CAUTION",
+      "thresholdTemp": 8.0,
+      "lastTemperature": 6.2,
+      "lastPosition": { "lat": 37.4979, "lon": 127.0276 },
+      "lastReportedAt": "2026-07-08T03:12:00Z",
+      "createdAt": "2026-07-08T01:00:00Z",
+      "deliveredAt": null
+    }
+  ],
+  "page": 0, "size": 20, "totalElements": 128
+}
+```
+`trackerStatus`는 트래커 재사용과 무관하게 항상 그 트래커의 **현재** 최신 상태를 담는다 — `shipmentStatus=DELIVERED`인 화물은 화면에서 "완료" 뱃지를 우선 표시하고 `trackerStatus`는 참고용으로만 쓴다(트래커가 이미 다음 배송에 재배치됐을 수 있어서).
 
 ### GET /api/v1/summary — 화주 요약 통계 (FR-8 화주 뷰)
 ```json
 // 200
-{ "totalShipments": 128, "inTransit": 57, "breachCount": 3, "rescuedByPrediction": 9, "avgDeliveryMinutes": 342 }
+{ "totalShipments": 128, "inTransit": 57, "breachCount": 3, "deliveredCount": 68, "rescuedByPrediction": 0, "avgDeliveryMinutes": 342 }
 ```
-`rescuedByPrediction`: 예측 경고 후 임계 미도달로 종료된 건수 — 데모 헤드라인 수치.
+`breachCount`는 진행 중(IN_TRANSIT) 배송 중 현재 BREACH 상태인 건수(스냅샷). `deliveredCount`(M3, 화물 관리 KPI "배송 완료"의 데이터 원천)는 DELIVERED 건수. `avgDeliveryMinutes`는 DELIVERED 건의 (배송완료시각 − 생성시각) 평균(분), 완료 건이 없으면 `null`. `rescuedByPrediction`: 예측 경고 후 임계 미도달로 종료된 건수 — M3엔 예측이 없어 항상 `0`(생략이 아니라 정직한 값, M4에서 실제 집계로 교체) — 데모 헤드라인 수치.
 
 ### GET /api/v1/alerts — 알림 발송 이력 (FR-6/7, M3)
 쿼리: `trackerId`(선택, 없으면 자사 전체), `page`/`size`(기본 0/20). 알림 탭·화물 관리 상세 패널 공용.
@@ -387,4 +415,4 @@
 | FR-8 | 인증 4종 중 2역할(§1.2) + 스코핑 규칙 + `GET /track/{token}` + `GET /summary` |
 | FR-9 | `GET /stream` (SSE) + `GET /trackers` |
 | FR-10 | `GET /trackers/{id}/track` |
-| FR-11(v2 최소) | `POST /trackers`, `POST/PATCH /shipments` |
+| FR-11(v2 최소) | `POST /trackers`, `POST/PATCH /shipments`, `GET /shipments`(목록, M3) |

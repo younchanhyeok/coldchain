@@ -38,9 +38,11 @@ def register_trackers(client: TrackerClient, count: int, profile_name: str, thre
         trackers.append({
             "trackerId": tracker_id,
             "deviceKey": registration["deviceKey"],
+            "shipmentId": shipment["shipmentId"],
             "profile": PROFILES[profile_name](),
             "seq": 0,
             "startTime": time.monotonic(),
+            "delivered": False,
         })
         print(f"[등록완료] {tracker_id}")
 
@@ -51,6 +53,9 @@ def run_loop(client: TrackerClient, trackers: list[dict], waypoints, interval: f
     try:
         while True:
             for t in trackers:
+                if t["delivered"]:
+                    continue
+
                 elapsed = time.monotonic() - t["startTime"]
                 temperature = t["profile"].step(elapsed, interval)
                 progress = min(elapsed / route_seconds, 1.0) if route_seconds > 0 else 1.0
@@ -62,6 +67,13 @@ def run_loop(client: TrackerClient, trackers: list[dict], waypoints, interval: f
                     t["trackerId"], t["deviceKey"], temperature, lat, lon, recorded_at, t["seq"])
                 marker = "OK" if response.status_code == 202 else f"ERR({response.status_code})"
                 print(f"{t['trackerId']} temp={temperature:6.2f} seq={t['seq']:4d} {marker}")
+
+                # 목적지 도달 — 배송 완료 처리 후 이 트래커는 더 이상 리딩을 보내지 않는다
+                # (GET /summary의 deliveredCount·avgDeliveryMinutes가 실제로 채워지려면 필요).
+                if progress >= 1.0:
+                    client.transition_shipment(t["shipmentId"], "DELIVERED")
+                    t["delivered"] = True
+                    print(f"[배송완료] {t['trackerId']}")
 
             time.sleep(interval)
     except KeyboardInterrupt:
