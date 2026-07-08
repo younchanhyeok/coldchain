@@ -46,7 +46,9 @@ public class TrackerQueryService {
                 devShipperProvider.shipperId(), shipmentStatus);
 
         // PERF(M6): N+1 — shipment마다 tracker/latest를 findById로 건당 조회한다(findAllById로
-        // 배치 가능). 지금은 정합성엔 문제없는 순수 성능 이슈라 M6 부하테스트에서 실측 후 고친다.
+        // 배치 가능). 필터·정렬·페이지네이션도 전건을 메모리에 올린 뒤 자바에서 수행 중이라
+        // M6에서 배치 조회와 함께 DB 사이드 페이지네이션으로 내려야 한다. 지금은 정합성엔
+        // 문제없는 순수 성능 이슈라 M6 부하테스트에서 실측 후 고친다.
         List<TrackerSummaryResponse> summaries = shipments.stream()
                 .map(shipment -> toSummary(shipment, findTracker(shipment.getTrackerId())))
                 .filter(summary -> statusFilter == null || summary.status() == statusFilter)
@@ -68,7 +70,7 @@ public class TrackerQueryService {
         TrackerSummaryResponse summary = toSummary(activeShipment.orElse(null), tracker);
         ShipmentSummary shipmentSummary = activeShipment.map(TrackerQueryService::toShipmentSummary).orElse(null);
 
-        return new TrackerDetailResponse(summary, shipmentSummary, List.of());
+        return new TrackerDetailResponse(summary, shipmentSummary, anomalyQueryService.findActiveAnomalies(trackerId));
     }
 
     private Tracker findTracker(String trackerId) {

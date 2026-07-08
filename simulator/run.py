@@ -70,10 +70,15 @@ def run_loop(client: TrackerClient, trackers: list[dict], waypoints, interval: f
 
                 # 목적지 도달 — 배송 완료 처리 후 이 트래커는 더 이상 리딩을 보내지 않는다
                 # (GET /summary의 deliveredCount·avgDeliveryMinutes가 실제로 채워지려면 필요).
+                # 전이 호출이 일시 실패해도 루프 전체를 죽이지 않는다 — delivered를 세우지 않고
+                # 다음 틱에 재시도한다(전이는 멱등하지 않지만 성공 전까지만 반복되므로 안전).
                 if progress >= 1.0:
-                    client.transition_shipment(t["shipmentId"], "DELIVERED")
-                    t["delivered"] = True
-                    print(f"[배송완료] {t['trackerId']}")
+                    try:
+                        client.transition_shipment(t["shipmentId"], "DELIVERED")
+                        t["delivered"] = True
+                        print(f"[배송완료] {t['trackerId']}")
+                    except Exception as e:
+                        print(f"[배송완료 전이 실패, 다음 틱에 재시도] {t['trackerId']}: {e}")
 
             time.sleep(interval)
     except KeyboardInterrupt:

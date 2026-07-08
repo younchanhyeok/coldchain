@@ -4,7 +4,6 @@ import { AlertDetailPanel } from '../components/alerts/AlertDetailPanel'
 import { AlertsFilterBar, type AlertPeriodFilter, type AlertTypeFilter } from '../components/alerts/AlertsFilterBar'
 import { AlertsKpiTiles } from '../components/alerts/AlertsKpiTiles'
 import { AlertsList } from '../components/alerts/AlertsList'
-import { useAlertLiveBadge } from '../hooks/useAlertLiveBadge'
 import { usePolling } from '../hooks/usePolling'
 import type { Alert } from '../types/alert'
 
@@ -18,9 +17,14 @@ function matchesFilters(alert: Alert, typeFilter: AlertTypeFilter, periodFilter:
   return true
 }
 
-export function AlertsPage() {
+interface AlertsPageProps {
+  /** SSE `alert` 이벤트 카운트 — App이 공유하는 단일 EventSource(useTrackerStream)에서 내려온다. */
+  newAlertCount: number
+  onDismissLiveBadge: () => void
+}
+
+export function AlertsPage({ newAlertCount, onDismissLiveBadge }: AlertsPageProps) {
   const { data: alertList, loading, error } = usePolling(() => getAlerts({ size: 200 }), 30_000)
-  const { newAlertCount, reset: dismissLiveBadge } = useAlertLiveBadge()
 
   const [typeFilter, setTypeFilter] = useState<AlertTypeFilter>('')
   const [periodFilter, setPeriodFilter] = useState<AlertPeriodFilter>('today')
@@ -52,14 +56,14 @@ export function AlertsPage() {
 
   return (
     <div className="flex flex-col gap-6">
-      <AlertsKpiTiles alerts={alerts} />
+      <AlertsKpiTiles alerts={alerts} sampleLimited={(alertList?.totalElements ?? 0) > alerts.length} />
       <AlertsFilterBar
         typeFilter={typeFilter}
         onTypeFilterChange={setTypeFilter}
         periodFilter={periodFilter}
         onPeriodFilterChange={setPeriodFilter}
         newAlertCount={newAlertCount}
-        onDismissLiveBadge={dismissLiveBadge}
+        onDismissLiveBadge={onDismissLiveBadge}
       />
       <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-[2fr_1fr]">
         <div className="h-[750px]">

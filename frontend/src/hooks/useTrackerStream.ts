@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import { BASE_URL } from '../api/client'
 import { getTrackers } from '../api/trackers'
 import type { StatusFilter } from '../components/layout/TopBar'
@@ -10,20 +10,29 @@ interface TrackerStreamResult {
   error: Error | null
   loading: boolean
   updatedAt: Date | null
+  /** SSE `alert` 이벤트 누적 건수 — 알림 탭 Live 배지용. */
+  newAlertCount: number
+  resetNewAlertCount: () => void
 }
 
 /**
  * 초기 목록은 REST로 불러오고, 이후 갱신은 SSE(`/api/v1/stream`)의 reading 이벤트로 받는다.
  * 연결이 열릴 때마다(최초 연결 포함, 브라우저의 자동 재연결 포함) REST 전체 재조회로 리싱크한다
  * (API 명세 §5.1의 MVP 재연결 정책).
+ *
+ * 알림 Live 배지(`alert` 이벤트 카운트)도 여기서 함께 구독한다 — 탭마다 EventSource를 따로
+ * 열면 클라이언트당 SSE 연결이 늘어나므로, 앱 전체가 이 훅의 연결 하나를 공유한다.
  */
 export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResult {
   const [trackers, setTrackers] = useState<TrackerSummary[]>([])
   const [error, setError] = useState<Error | null>(null)
   const [loading, setLoading] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
+  const [newAlertCount, setNewAlertCount] = useState(0)
   const statusFilterRef = useRef(statusFilter)
   statusFilterRef.current = statusFilter
+
+  const resetNewAlertCount = useCallback(() => setNewAlertCount(0), [])
 
   useEffect(() => {
     let cancelled = false
@@ -80,6 +89,8 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
 
     source.addEventListener('heartbeat', () => setUpdatedAt(new Date()))
 
+    source.addEventListener('alert', () => setNewAlertCount((count) => count + 1))
+
     source.onerror = () => {
       setError(new Error('실시간 연결(SSE)에 문제가 발생했습니다.'))
     }
@@ -90,5 +101,5 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
     }
   }, [statusFilter])
 
-  return { trackers, error, loading, updatedAt }
+  return { trackers, error, loading, updatedAt, newAlertCount, resetNewAlertCount }
 }

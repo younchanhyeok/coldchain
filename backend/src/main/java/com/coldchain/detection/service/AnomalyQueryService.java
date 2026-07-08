@@ -1,7 +1,9 @@
 package com.coldchain.detection.service;
 
 import com.coldchain.detection.domain.AnomalyStatus;
+import com.coldchain.detection.dto.AnomalyResponse;
 import com.coldchain.detection.repository.AnomalyEventRepository;
+import java.util.List;
 import org.springframework.stereotype.Service;
 
 /**
@@ -20,5 +22,13 @@ public class AnomalyQueryService {
     /** CAUTION 판정용 — 유형(SUDDEN/GRADUAL) 무관하게 활성 이상이 하나라도 있으면 true. */
     public boolean hasActiveAnomaly(String trackerId) {
         return anomalyEventRepository.existsByTrackerIdAndStatus(trackerId, AnomalyStatus.ACTIVE);
+    }
+
+    /** 트래커 단건 상세의 activeAnomalies[] — 활성 이상 전부(최신순). */
+    public List<AnomalyResponse> findActiveAnomalies(String trackerId) {
+        return anomalyEventRepository.findByTrackerIdAndStatusOrderByTsDesc(trackerId, AnomalyStatus.ACTIVE)
+                .stream()
+                .map(AnomalyResponse::from)
+                .toList();
     }
 }
