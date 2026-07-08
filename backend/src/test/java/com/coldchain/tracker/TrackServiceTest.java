@@ -10,7 +10,9 @@ import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.domain.ShipmentStatus;
 import com.coldchain.shipment.repository.ShipmentRepository;
 import com.coldchain.tracker.domain.Tracker;
+import com.coldchain.tracker.domain.TrackerLatest;
 import com.coldchain.tracker.dto.TrackResponse;
+import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import com.coldchain.tracker.service.TrackService;
 import java.math.BigDecimal;
@@ -37,6 +39,9 @@ class TrackServiceTest {
 
     @Autowired
     private ReadingRepository readingRepository;
+
+    @Autowired
+    private TrackerLatestRepository trackerLatestRepository;
 
     private Shipment givenTrackerWithActiveShipment(String trackerId) {
         trackerRepository.save(new Tracker(trackerId, 1L, "백신 A", new BigDecimal("8.0"), "hash"));
@@ -98,5 +103,52 @@ class TrackServiceTest {
         assertThat(track.breachSegments().get(1).coordinates()).hasSize(1); // 초과 1건, 정상으로 끊김
         assertThat(track.breachSegments().get(0).coordinates().get(0).get(1)).isEqualTo(37.421);
         assertThat(track.breachSegments().get(1).coordinates().get(0).get(1)).isEqualTo(37.424);
+    }
+
+    @Test
+    void etaMinutesIsCalculatedFromRecentMovementSpeed() {
+        String trackerId = "TRK-TRACK-ETA-MOVING";
+        Shipment shipment = givenTrackerWithActiveShipment(trackerId);
+        Instant base = shipment.getCreatedAt().plusSeconds(1);
+
+        // 60초 간격으로 위도 0.0001도(약 11m)씩 북상 — 정지 판정 임계(0.1 m/s)를 넉넉히 넘는 속도
+        List<Reading> readings = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            readings.add(new Reading(trackerId, base.plusSeconds(i * 60L), new BigDecimal("5.0"),
+                    GeoPoints.of(37.42 + i * 0.0001, 127.12)));
+        }
+        readingRepository.saveAll(readings);
+
+        TrackerLatest latest = new TrackerLatest(trackerId);
+        latest.applyReading(base.plusSeconds(240), new BigDecimal("5.0"), GeoPoints.of(37.4204, 127.12));
+        trackerLatestRepository.save(latest);
+
+        TrackResponse track = trackService.getTrack(trackerId);
+
+        assertThat(track.etaMinutes()).isNotNull();
+        assertThat(track.etaMinutes()).isGreaterThan(0);
+    }
+
+    @Test
+    void etaMinutesIsNullWhenTrackerIsStationary() {
+        String trackerId = "TRK-TRACK-ETA-STATIONARY";
+        Shipment shipment = givenTrackerWithActiveShipment(trackerId);
+        Instant base = shipment.getCreatedAt().plusSeconds(1);
+
+        // 같은 위치에 계속 머무름 — 이동거리 0
+        List<Reading> readings = new ArrayList<>();
+        for (int i = 0; i < 5; i++) {
+            readings.add(new Reading(trackerId, base.plusSeconds(i * 60L), new BigDecimal("5.0"),
+                    GeoPoints.of(37.42, 127.12)));
+        }
+        readingRepository.saveAll(readings);
+
+        TrackerLatest latest = new TrackerLatest(trackerId);
+        latest.applyReading(base.plusSeconds(240), new BigDecimal("5.0"), GeoPoints.of(37.42, 127.12));
+        trackerLatestRepository.save(latest);
+
+        TrackResponse track = trackService.getTrack(trackerId);
+
+        assertThat(track.etaMinutes()).isNull();
     }
 }
