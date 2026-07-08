@@ -1,14 +1,22 @@
-const NAV_ITEMS = [
-  { label: '대시보드', active: true },
-  { label: '화물 관리', active: false },
-  { label: '위험 모니터링', active: false },
-  { label: '배송 현황', active: false },
-  { label: '알림', active: false },
-  { label: '리포트', active: false },
-  { label: '설정', active: false },
+export type Tab = 'dashboard' | 'cargo'
+
+// 화면_탭_구성.md 확정 순서: 대시보드 → 화물 관리 → 알림 → 리포트 → 배송 현황.
+// 위험 모니터링은 "M3엔 사이드바 미노출"이 확정 사항이라 M4 전까지 목록에서 아예 뺀다.
+// 설정 탭은 채울 실체가 없어 삭제 확정.
+const NAV_ITEMS: { label: string; tab: Tab | null }[] = [
+  { label: '대시보드', tab: 'dashboard' },
+  { label: '화물 관리', tab: 'cargo' },
+  { label: '알림', tab: null }, // PR5에서 구현
+  { label: '리포트', tab: null }, // M4
+  { label: '배송 현황', tab: null }, // PR6에서 구현
 ]
 
-export function Sidebar() {
+interface SidebarProps {
+  activeTab: Tab
+  onSelectTab: (tab: Tab) => void
+}
+
+export function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-r border-border bg-sidebar">
       <div className="px-4 py-5 text-lg font-semibold tracking-tight text-neutral-100">
@@ -17,11 +25,17 @@ export function Sidebar() {
       <nav className="flex-1 px-2">
         <ul className="space-y-1">
           {NAV_ITEMS.map((item) =>
-            item.active ? (
+            item.tab ? (
               <li key={item.label}>
-                <span className="block rounded-md bg-primary/15 px-3 py-2 text-sm text-primary">
+                <button
+                  type="button"
+                  onClick={() => onSelectTab(item.tab!)}
+                  className={`block w-full rounded-md px-3 py-2 text-left text-sm ${
+                    activeTab === item.tab ? 'bg-primary/15 text-primary' : 'text-neutral-400 hover:bg-card-hover'
+                  }`}
+                >
                   {item.label}
-                </span>
+                </button>
               </li>
             ) : (
               <li key={item.label}>

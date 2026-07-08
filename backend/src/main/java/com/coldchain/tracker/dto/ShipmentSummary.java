@@ -6,5 +6,6 @@ public record ShipmentSummary(
         PositionResponse origin,
         PositionResponse destination,
         String consigneeName,
+        String driverContact,
         ShipmentStatus status) {
 }

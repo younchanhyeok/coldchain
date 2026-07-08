@@ -9,6 +9,7 @@ interface DashboardPageProps {
   trackers: TrackerSummary[]
   loading: boolean
   error: Error | null
+  onNavigateToCargo: () => void
 }
 
 function pickDefaultTracker(trackers: TrackerSummary[]): string | null {
@@ -21,7 +22,7 @@ function pickDefaultTracker(trackers: TrackerSummary[]): string | null {
   return mostOverThreshold.trackerId
 }
 
-export function DashboardPage({ trackers, loading, error }: DashboardPageProps) {
+export function DashboardPage({ trackers, loading, error, onNavigateToCargo }: DashboardPageProps) {
   const [selectedTrackerId, setSelectedTrackerId] = useState<string | null>(null)
 
   useEffect(() => {
@@ -45,7 +46,12 @@ export function DashboardPage({ trackers, loading, error }: DashboardPageProps) 
     <div className="flex flex-col gap-6">
       <KpiTiles trackers={trackers} />
       <div className="grid h-[480px] grid-cols-1 items-stretch gap-6 lg:grid-cols-[2fr_1fr]">
-        <RiskList trackers={trackers} selectedTrackerId={selectedTrackerId} onSelectTracker={setSelectedTrackerId} />
+        <RiskList
+          trackers={trackers}
+          selectedTrackerId={selectedTrackerId}
+          onSelectTracker={setSelectedTrackerId}
+          onViewAll={onNavigateToCargo}
+        />
         <TrackerMap
           trackerId={selectedTrackerId}
           currentPosition={selectedTracker?.lastPosition ?? null}

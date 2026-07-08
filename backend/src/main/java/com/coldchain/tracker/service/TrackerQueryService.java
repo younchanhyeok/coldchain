@@ -121,6 +121,7 @@ public class TrackerQueryService {
         PositionResponse destination = shipment.getDestinationPosition() != null
                 ? new PositionResponse(GeoPoints.lat(shipment.getDestinationPosition()), GeoPoints.lon(shipment.getDestinationPosition()))
                 : null;
-        return new ShipmentSummary(origin, destination, shipment.getConsigneeName(), shipment.getStatus());
+        return new ShipmentSummary(
+                origin, destination, shipment.getConsigneeName(), shipment.getDriverContact(), shipment.getStatus());
     }
 }
