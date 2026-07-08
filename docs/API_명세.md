@@ -156,7 +156,7 @@
 정렬: `RISK`/`BREACH` 우선(예측 이탈 임박 순) → 나머지 최신 보고 순. UIUX.png "위험 화물 리스트" 요구 반영.
 
 ### GET /api/v1/trackers/{trackerId} — 단건 상세
-목록 항목 + `shipment` 요약(출발/도착지, 수령기관명, 상태) + `activeAnomalies[]`.
+목록 항목 + `shipment` 요약(출발/도착지 좌표, 수령기관명, **기사 연락처 driverContact**(M3), 상태) + `activeAnomalies[]`. 기사는 이름 필드가 없어 연락처로만 표시한다.
 
 ### GET /api/v1/trackers/{trackerId}/readings — 온도 시계열 (차트)
 쿼리: `from`/`to`(기본 최근 6h), `limit`, `interval`(선택 — `1m`/`5m` 다운샘플, M6 Timescale 이후).

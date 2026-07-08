@@ -5,6 +5,7 @@ interface RiskListProps {
   trackers: TrackerSummary[]
   selectedTrackerId: string | null
   onSelectTracker: (trackerId: string) => void
+  onViewAll: () => void
 }
 
 function overThreshold(t: TrackerSummary): number {
@@ -17,17 +18,26 @@ function temperatureToneClass(t: TrackerSummary): string {
   return 'text-primary'
 }
 
-export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskListProps) {
-  const risky = trackers.filter((t) => t.status === 'BREACH').sort((a, b) => overThreshold(b) - overThreshold(a))
+// BREACH가 CAUTION보다 항상 위 — 같은 등급 안에서는 임계 초과폭이 큰 순.
+function riskRank(t: TrackerSummary): number {
+  return t.status === 'BREACH' ? 1 : 0
+}
 
-  // 전체 화물 관리 화면은 아직 없음 — 클릭 동작 없는 span으로 명확히 구분
+export function RiskList({ trackers, selectedTrackerId, onSelectTracker, onViewAll }: RiskListProps) {
+  // M3부터 CAUTION(활성 이상탐지)도 포함 — BREACH만이 아니라 "이상 감지됨"까지 위험 리스트에 노출.
+  const risky = trackers
+    .filter((t) => t.status === 'BREACH' || t.status === 'CAUTION')
+    .sort((a, b) => riskRank(b) - riskRank(a) || overThreshold(b) - overThreshold(a))
+
+  // M3부터 화물 관리 탭이 생겨 실제 이동 가능 — 이전엔 클릭 동작 없는 span이었다.
   const footer = (
-    <span
-      className="inline-block cursor-default text-xs text-neutral-600 select-none"
-      title="아직 준비되지 않은 화면입니다"
+    <button
+      type="button"
+      onClick={onViewAll}
+      className="inline-block text-xs text-primary hover:underline"
     >
       전체 보기 →
-    </span>
+    </button>
   )
 
   return (
@@ -65,9 +75,15 @@ export function RiskList({ trackers, selectedTrackerId, onSelectTracker }: RiskL
                 </td>
                 <td className="pr-6 py-2 text-neutral-400">{t.thresholdTemp.toFixed(1)}℃</td>
                 <td className="py-2">
-                  <span className="rounded-full bg-danger/15 px-2.5 py-1 text-xs font-medium text-danger">
-                    BREACH
-                  </span>
+                  {t.status === 'BREACH' ? (
+                    <span className="rounded-full bg-danger/15 px-2.5 py-1 text-xs font-medium text-danger">
+                      이탈
+                    </span>
+                  ) : (
+                    <span className="rounded-full bg-warning/15 px-2.5 py-1 text-xs font-medium text-warning">
+                      주의
+                    </span>
+                  )}
                 </td>
               </tr>
             ))}

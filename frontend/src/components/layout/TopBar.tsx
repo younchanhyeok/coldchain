@@ -3,8 +3,9 @@ import { useEffect, useState } from 'react'
 export type StatusFilter = '' | 'SAFE' | 'BREACH'
 
 interface TopBarProps {
-  statusFilter: StatusFilter
-  onStatusFilterChange: (value: StatusFilter) => void
+  title: string
+  statusFilter?: StatusFilter
+  onStatusFilterChange?: (value: StatusFilter) => void
   lastUpdated: Date | null
 }
 
@@ -22,12 +23,12 @@ function useElapsedLabel(since: Date | null): string {
   return `${Math.floor(seconds / 60)}분 전 업데이트`
 }
 
-export function TopBar({ statusFilter, onStatusFilterChange, lastUpdated }: TopBarProps) {
+export function TopBar({ title, statusFilter, onStatusFilterChange, lastUpdated }: TopBarProps) {
   const elapsedLabel = useElapsedLabel(lastUpdated)
 
   return (
     <header className="flex h-[72px] items-center justify-between border-b border-border bg-header px-8">
-      <h1 className="text-lg font-semibold text-neutral-100">화주 대시보드</h1>
+      <h1 className="text-lg font-semibold text-neutral-100">{title}</h1>
       <div className="flex items-center gap-4">
         <span className="text-xs text-neutral-500">{elapsedLabel}</span>
         <span
@@ -36,15 +37,17 @@ export function TopBar({ statusFilter, onStatusFilterChange, lastUpdated }: TopB
         >
           날짜 범위 (준비 중)
         </span>
-        <select
-          className="h-11 rounded-control border border-border bg-card px-3 text-sm text-neutral-200"
-          value={statusFilter}
-          onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
-        >
-          <option value="">전체 화물</option>
-          <option value="SAFE">정상만</option>
-          <option value="BREACH">이탈 위험만</option>
-        </select>
+        {statusFilter !== undefined && onStatusFilterChange && (
+          <select
+            className="h-11 rounded-control border border-border bg-card px-3 text-sm text-neutral-200"
+            value={statusFilter}
+            onChange={(e) => onStatusFilterChange(e.target.value as StatusFilter)}
+          >
+            <option value="">전체 화물</option>
+            <option value="SAFE">정상만</option>
+            <option value="BREACH">이탈 위험만</option>
+          </select>
+        )}
         <span className="cursor-default select-none text-neutral-600" title="준비 중">
           🔔
         </span>
