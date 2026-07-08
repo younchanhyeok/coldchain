@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { CustomOverlayMap, Map, MapMarker, Polyline, useKakaoLoader } from 'react-kakao-maps-sdk'
 import type { GeoJsonLineString } from '../../types/track'
 import { getTrack } from '../../api/track'
@@ -45,6 +46,25 @@ export function TrackerMap({ trackerId, currentPosition, trackers }: TrackerMapP
     [trackerId],
   )
 
+  const effectiveCurrent = currentPosition ?? track?.current ?? null
+
+  // 센터는 트래커 선택 시 최초 1회만 고정 — 매 리딩마다 현재 위치로 재센터링하면 사용자가
+  // 지도를 드래그해 다른 곳을 볼 수 없다(스냅백). 이후 이동은 사용자 조작에 맡긴다.
+  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null)
+
+  useEffect(() => {
+    setCenter(null) // 선택 트래커가 바뀌면 새 트래커 기준으로 다시 센터를 잡는다
+  }, [trackerId])
+
+  useEffect(() => {
+    if (center) return
+    if (effectiveCurrent) {
+      setCenter({ lat: effectiveCurrent.lat, lng: effectiveCurrent.lon })
+    } else if (track) {
+      setCenter({ lat: track.destination.lat, lng: track.destination.lon })
+    }
+  }, [center, effectiveCurrent, track])
+
   const safeCount = trackers.filter((t) => t.status === 'SAFE').length
   const breachCount = trackers.filter((t) => t.status === 'BREACH').length
 
@@ -68,12 +88,11 @@ export function TrackerMap({ trackerId, currentPosition, trackers }: TrackerMapP
     if (error || !track) {
       return <PlaceholderBody message="지도를 불러오지 못했습니다." />
     }
+    if (!center) {
+      return <PlaceholderBody message="지도를 불러오는 중..." />
+    }
 
-    const effectiveCurrent = currentPosition ?? track.current
     const pathLatLng = toLatLng(track.path)
-    const center = effectiveCurrent
-      ? { lat: effectiveCurrent.lat, lng: effectiveCurrent.lon }
-      : { lat: track.destination.lat, lng: track.destination.lon }
 
     return (
       <Map center={center} level={7} style={{ width: '100%', height: '100%', minHeight: 320 }}>

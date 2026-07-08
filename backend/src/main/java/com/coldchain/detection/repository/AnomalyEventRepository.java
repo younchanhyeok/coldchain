@@ -14,6 +14,8 @@ public interface AnomalyEventRepository extends JpaRepository<AnomalyEvent, Long
 
     boolean existsByTrackerIdAndStatus(String trackerId, AnomalyStatus status);
 
+    List<AnomalyEvent> findByTrackerIdAndStatusOrderByTsDesc(String trackerId, AnomalyStatus status);
+
     List<AnomalyEvent> findByTrackerIdAndTsBetweenOrderByTsDesc(String trackerId, Instant from, Instant to);
 
     List<AnomalyEvent> findByTrackerIdAndTypeAndTsBetweenOrderByTsDesc(

@@ -18,6 +18,8 @@ import org.slf4j.LoggerFactory;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.scheduling.annotation.Scheduled;
+import org.springframework.transaction.event.TransactionPhase;
+import org.springframework.transaction.event.TransactionalEventListener;
 import org.springframework.stereotype.Service;
 import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 
@@ -63,8 +65,9 @@ public class SseBroadcaster {
         }
     }
 
+    // 탐지 트랜잭션 커밋 후에만 브로드캐스트 — 커밋 실패 시 DB에 없는 anomaly가 화면에 뜨는 것을 방지.
     @Async
-    @EventListener
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
     public void onAnomalyDetected(AnomalyDetectedEvent event) {
         broadcast("anomaly", new AnomalyStreamEvent(
                 event.trackerId(), event.type(), event.severity(), event.message(), event.ts(), event.status()));

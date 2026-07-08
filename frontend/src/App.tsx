@@ -19,7 +19,7 @@ function App() {
   const [activeTab, setActiveTab] = useState<Tab>('dashboard')
   const [statusFilter, setStatusFilter] = useState<StatusFilter>('')
 
-  const { trackers, error, loading, updatedAt } = useTrackerStream(statusFilter)
+  const { trackers, error, loading, updatedAt, newAlertCount, resetNewAlertCount } = useTrackerStream(statusFilter)
 
   return (
     <DashboardLayout
@@ -40,7 +40,7 @@ function App() {
       ) : activeTab === 'cargo' ? (
         <CargoManagementPage />
       ) : activeTab === 'alerts' ? (
-        <AlertsPage />
+        <AlertsPage newAlertCount={newAlertCount} onDismissLiveBadge={resetNewAlertCount} />
       ) : (
         <LiveOpsMapPage trackers={trackers} loading={loading} error={error} />
       )}

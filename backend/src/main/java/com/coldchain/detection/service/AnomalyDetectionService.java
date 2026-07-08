@@ -15,7 +15,7 @@ import java.util.Optional;
 import java.util.concurrent.ConcurrentHashMap;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
-import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * L2 이상탐지 — z-score(급변)·최소자승 기울기(점진 이탈)로 SUDDEN/GRADUAL을 판정한다.
@@ -34,6 +34,7 @@ public class AnomalyDetectionService {
     private final TemperatureWindowRepository windowRepository;
     private final AnomalyEventRepository anomalyEventRepository;
     private final ApplicationEventPublisher eventPublisher;
+    private final TransactionTemplate transactionTemplate;
 
     // @Async 리스너는 트래커별 순서를 보장하지 않는다(SimpleAsyncTaskExecutor는 호출마다 새 스레드) —
     // 같은 트래커의 리딩이 몰릴 때 윈도우 push나 cleanStreak 증가가 동시에 겹치면 유실될 수 있어
@@ -42,17 +43,25 @@ public class AnomalyDetectionService {
     private final ConcurrentHashMap<String, Object> trackerLocks = new ConcurrentHashMap<>();
 
     public AnomalyDetectionService(TemperatureWindowRepository windowRepository,
-            AnomalyEventRepository anomalyEventRepository, ApplicationEventPublisher eventPublisher) {
+            AnomalyEventRepository anomalyEventRepository, ApplicationEventPublisher eventPublisher,
+            TransactionTemplate transactionTemplate) {
         this.windowRepository = windowRepository;
         this.anomalyEventRepository = anomalyEventRepository;
         this.eventPublisher = eventPublisher;
+        this.transactionTemplate = transactionTemplate;
     }
 
-    @Transactional
+    /**
+     * 락을 먼저 잡고 그 안에서 트랜잭션을 연다(@Transactional이면 순서가 반대가 된다 — 프록시가
+     * 트랜잭션=DB 커넥션을 먼저 열고 락을 기다리므로, 같은 트래커 이벤트가 몰리면 대기 스레드들이
+     * 커넥션을 쥔 채 블록되어 풀 고갈로 이어질 수 있다). AnomalyDetectedEvent는 트랜잭션 안에서
+     * 발행되고, 소비자(@TransactionalEventListener AFTER_COMMIT)가 커밋 후에만 실행되므로
+     * 커밋 실패 시 유령 알림이 나가지 않는다.
+     */
     public void analyze(ReadingRecordedEvent event) {
         Object lock = trackerLocks.computeIfAbsent(event.trackerId(), id -> new Object());
         synchronized (lock) {
-            analyzeLocked(event);
+            transactionTemplate.executeWithoutResult(status -> analyzeLocked(event));
         }
     }
 

@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { getAlerts } from '../api/alerts'
 import { getShipments } from '../api/shipments'
 import { getTrack } from '../api/track'
@@ -28,7 +28,8 @@ interface LiveOpsMapPageProps {
 export function LiveOpsMapPage({ trackers, loading, error }: LiveOpsMapPageProps) {
   const [keyword, setKeyword] = useState('')
   const [selectedTrackerId, setSelectedTrackerId] = useState<string | null>(null)
-  const [avgEtaMinutes, setAvgEtaMinutes] = useState<number | null>(null)
+  const trackersRef = useRef(trackers)
+  trackersRef.current = trackers
 
   const filteredTrackers = useMemo(
     () =>
@@ -47,21 +48,22 @@ export function LiveOpsMapPage({ trackers, loading, error }: LiveOpsMapPageProps
 
   // 평균 ETA는 화면에 보이는 트래커마다 개별 track 호출 후 평균을 낸다(집계 API 없음) —
   // 트래커 수가 많아지면 N+1로 부담이 커지므로 상한 넘으면 계산 자체를 생략(정직하게 "—").
-  useEffect(() => {
-    let cancelled = false
-    if (trackers.length === 0 || trackers.length > MAX_TRACKERS_FOR_AVG_ETA) {
-      setAvgEtaMinutes(null)
-      return
-    }
-    Promise.all(trackers.map((t) => getTrack(t.trackerId).catch(() => null))).then((results) => {
-      if (cancelled) return
+  // 주의: trackers 배열은 SSE 리딩마다 새 객체가 되므로 effect deps로 직접 쓰면 리딩마다
+  // N건의 track 호출이 폭주한다 — 최신 목록은 ref로 읽고, 재계산은 30초 폴링과 트래커 수
+  // 변화 시에만 한다.
+  const { data: avgEtaMinutes } = usePolling(
+    async () => {
+      const list = trackersRef.current
+      if (list.length === 0 || list.length > MAX_TRACKERS_FOR_AVG_ETA) {
+        return null
+      }
+      const results = await Promise.all(list.map((t) => getTrack(t.trackerId).catch(() => null)))
       const values = results.filter((r): r is NonNullable<typeof r> => r?.etaMinutes != null).map((r) => r.etaMinutes!)
-      setAvgEtaMinutes(values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null)
-    })
-    return () => {
-      cancelled = true
-    }
-  }, [trackers])
+      return values.length > 0 ? values.reduce((a, b) => a + b, 0) / values.length : null
+    },
+    30_000,
+    [trackers.length],
+  )
 
   const { data: tracker } = usePolling(
     () => (selectedTrackerId ? getTrackerDetail(selectedTrackerId) : Promise.resolve(null)),

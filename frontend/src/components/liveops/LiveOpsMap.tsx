@@ -1,3 +1,4 @@
+import { useEffect, useState } from 'react'
 import { CustomOverlayMap, Map, MapMarker, Polyline, useKakaoLoader } from 'react-kakao-maps-sdk'
 import { getTrack } from '../../api/track'
 import { usePolling } from '../../hooks/usePolling'
@@ -46,6 +47,16 @@ export function LiveOpsMap({ trackers, selectedTrackerId, onSelectTracker }: Liv
   const safeCount = trackers.filter((t) => t.status === 'SAFE').length
   const breachCount = trackers.filter((t) => t.status === 'BREACH').length
 
+  // 센터는 최초 1회만 고정 — 리딩마다 첫 트래커 위치로 재센터링하면 사용자가 지도를 드래그해
+  // 다른 지역을 볼 수 없다(스냅백). 이후 이동은 사용자 조작에 맡긴다.
+  const [center, setCenter] = useState<{ lat: number; lng: number } | null>(null)
+
+  useEffect(() => {
+    if (center === null && positioned.length > 0) {
+      setCenter({ lat: positioned[0].lastPosition!.lat, lng: positioned[0].lastPosition!.lon })
+    }
+  }, [center, positioned])
+
   const footer = (
     <div className="flex items-center gap-4 text-xs text-neutral-400">
       <LegendDot colorHex={STATUS_COLOR.SAFE} label={`정상 ${safeCount}`} />
@@ -66,8 +77,10 @@ export function LiveOpsMap({ trackers, selectedTrackerId, onSelectTracker }: Liv
     if (positioned.length === 0) {
       return <PlaceholderBody message="위치 데이터가 있는 트래커가 없습니다." />
     }
+    if (!center) {
+      return <PlaceholderBody message="지도를 불러오는 중..." />
+    }
 
-    const center = { lat: positioned[0].lastPosition!.lat, lng: positioned[0].lastPosition!.lon }
     const pathLatLng = track ? toLatLng(track.path) : []
 
     return (
