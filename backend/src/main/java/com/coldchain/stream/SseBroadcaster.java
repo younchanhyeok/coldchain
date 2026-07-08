@@ -1,8 +1,10 @@
 package com.coldchain.stream;
 
+import com.coldchain.alert.event.AlertRaisedEvent;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.detection.event.AnomalyDetectedEvent;
 import com.coldchain.ingest.event.ReadingRecordedEvent;
+import com.coldchain.stream.dto.AlertStreamEvent;
 import com.coldchain.stream.dto.AnomalyStreamEvent;
 import com.coldchain.stream.dto.BreachStreamEvent;
 import com.coldchain.stream.dto.ReadingStreamEvent;
@@ -66,6 +68,13 @@ public class SseBroadcaster {
     public void onAnomalyDetected(AnomalyDetectedEvent event) {
         broadcast("anomaly", new AnomalyStreamEvent(
                 event.trackerId(), event.type(), event.severity(), event.message(), event.ts(), event.status()));
+    }
+
+    @Async
+    @EventListener
+    public void onAlertRaised(AlertRaisedEvent event) {
+        broadcast("alert", new AlertStreamEvent(
+                event.id(), event.trackerId(), event.type(), event.severity(), event.status(), event.createdAt()));
     }
 
     @Scheduled(fixedRate = 15_000)
