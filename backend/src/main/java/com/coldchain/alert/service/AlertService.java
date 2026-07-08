@@ -56,6 +56,9 @@ public class AlertService {
             alert.markSent(result.retryCount());
         } else {
             alert.markFailed(result.retryCount());
+            // 실패한 발송은 dedup 억제 대상이 아니다 — 락을 풀어 다음 전이 때 재시도 가능하게 한다
+            // (그대로 두면 Slack 장애 중 지속 breach가 TTL 내내 조용히 묻힌다).
+            dedupService.release(trackerId, type);
         }
         alertRepository.save(alert);
     }

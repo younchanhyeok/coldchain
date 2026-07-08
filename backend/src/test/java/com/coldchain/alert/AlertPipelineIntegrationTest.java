@@ -122,6 +122,34 @@ class AlertPipelineIntegrationTest {
     }
 
     @Test
+    void failedSendReleasesDedupLockSoNextTransitionCanRetryImmediately() throws Exception {
+        String trackerId = "TRK-ALERT-RETRY-AFTER-FAIL";
+        String deviceKey = registerTracker(trackerId, 8.0);
+        // 1차 시도는 실패, 2차 시도는 성공 — dedup 락이 실패 시 풀리지 않으면 2차가 억제돼 1건만 남는다.
+        when(slackAlertSender.send(anyString()))
+                .thenReturn(SlackAlertSender.SendResult.failed(3))
+                .thenReturn(SlackAlertSender.SendResult.success(1));
+
+        sendReading(trackerId, deviceKey, 5.0, Instant.now());
+        sendReading(trackerId, deviceKey, 9.0, Instant.now()); // 1차 BREACH 전이 — 발송 실패
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            List<Alert> alerts = findByTracker(trackerId);
+            assertThat(alerts).as("alerts=%s", alerts).hasSize(1);
+            assertThat(alerts.get(0).getStatus()).isEqualTo(AlertStatus.FAILED);
+        });
+
+        sendReading(trackerId, deviceKey, 5.0, Instant.now()); // SAFE 복귀
+        sendReading(trackerId, deviceKey, 9.0, Instant.now()); // 2차 BREACH 전이 — 억제되면 안 됨(락 해제됨)
+
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() -> {
+            List<Alert> alerts = findByTracker(trackerId);
+            assertThat(alerts).as("alerts=%s", alerts).hasSize(2);
+            assertThat(alerts).anyMatch(a -> a.getStatus() == AlertStatus.SENT);
+        });
+    }
+
+    @Test
     void duplicateBreachWithinDedupWindowIsSuppressed() throws Exception {
         String trackerId = "TRK-ALERT-DEDUP";
         String deviceKey = registerTracker(trackerId, 8.0);
