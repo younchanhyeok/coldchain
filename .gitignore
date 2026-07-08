@@ -35,3 +35,6 @@ infra/data/
 # OS
 .DS_Store
 Thumbs.db
+
+# 개인 학습/정리 노트 (리포에 올리지 않음)
+docs/개발정리_*.md
