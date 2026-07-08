@@ -21,10 +21,10 @@ def make_tracker_id(run_stamp: str, index: int) -> str:
 
 
 def register_trackers(client: TrackerClient, count: int, profile_name: str, threshold: float,
-                       waypoints) -> list[dict]:
+                       waypoints, origin_name: str, destination_name: str) -> list[dict]:
     run_stamp = f"{int(time.time())}{uuid.uuid4().hex[:4]}"
-    origin = {"lat": waypoints[0].lat, "lon": waypoints[0].lon, "name": "성남 물류센터"}
-    destination = {"lat": waypoints[-1].lat, "lon": waypoints[-1].lon, "name": "서울대병원 약제부"}
+    origin = {"lat": waypoints[0].lat, "lon": waypoints[0].lon, "name": origin_name}
+    destination = {"lat": waypoints[-1].lat, "lon": waypoints[-1].lon, "name": destination_name}
 
     trackers = []
     for i in range(count):
@@ -89,12 +89,15 @@ def main():
     parser.add_argument("--route", default=DEFAULT_ROUTE, help="경로 CSV 경로 (lat,lon 컬럼)")
     parser.add_argument("--route-minutes", type=float, default=30.0, help="경로 전체를 주파하는 데 걸리는 시간(분)")
     parser.add_argument("--threshold", type=float, default=8.0, help="임계 온도(℃)")
+    parser.add_argument("--origin-name", default="성남 물류센터", help="출발지 표시명")
+    parser.add_argument("--destination-name", default="서울대병원 약제부", help="도착지 표시명")
     args = parser.parse_args()
 
     waypoints = load_route(args.route)
     client = TrackerClient(args.target)
 
-    trackers = register_trackers(client, args.trackers, args.profile, args.threshold, waypoints)
+    trackers = register_trackers(
+        client, args.trackers, args.profile, args.threshold, waypoints, args.origin_name, args.destination_name)
     print(f"\n{len(trackers)}개 트래커 등록 완료 — {args.interval}초 주기로 전송 시작 (Ctrl+C로 중단)\n")
 
     run_loop(client, trackers, waypoints, args.interval, args.route_minutes * 60)

@@ -6,11 +6,13 @@ import { useTrackerStream } from './hooks/useTrackerStream'
 import { AlertsPage } from './pages/AlertsPage'
 import { CargoManagementPage } from './pages/CargoManagementPage'
 import { DashboardPage } from './pages/DashboardPage'
+import { LiveOpsMapPage } from './pages/LiveOpsMapPage'
 
 const TAB_TITLES: Record<Tab, string> = {
   dashboard: '화주 대시보드',
   cargo: '화물 관리',
   alerts: '알림 센터',
+  liveops: '배송 현황',
 }
 
 function App() {
@@ -24,8 +26,8 @@ function App() {
       title={TAB_TITLES[activeTab]}
       activeTab={activeTab}
       onSelectTab={setActiveTab}
-      statusFilter={activeTab === 'dashboard' ? statusFilter : undefined}
-      onStatusFilterChange={activeTab === 'dashboard' ? setStatusFilter : undefined}
+      statusFilter={activeTab === 'dashboard' || activeTab === 'liveops' ? statusFilter : undefined}
+      onStatusFilterChange={activeTab === 'dashboard' || activeTab === 'liveops' ? setStatusFilter : undefined}
       lastUpdated={updatedAt}
     >
       {activeTab === 'dashboard' ? (
@@ -37,8 +39,10 @@ function App() {
         />
       ) : activeTab === 'cargo' ? (
         <CargoManagementPage />
-      ) : (
+      ) : activeTab === 'alerts' ? (
         <AlertsPage />
+      ) : (
+        <LiveOpsMapPage trackers={trackers} loading={loading} error={error} />
       )}
     </DashboardLayout>
   )

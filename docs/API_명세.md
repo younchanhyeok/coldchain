@@ -237,13 +237,14 @@
       "lastPosition": { "lat": 37.4979, "lon": 127.0276 },
       "lastReportedAt": "2026-07-08T03:12:00Z",
       "createdAt": "2026-07-08T01:00:00Z",
+      "inTransitAt": "2026-07-08T01:05:00Z",
       "deliveredAt": null
     }
   ],
   "page": 0, "size": 20, "totalElements": 128
 }
 ```
-`trackerStatus`는 트래커 재사용과 무관하게 항상 그 트래커의 **현재** 최신 상태를 담는다 — `shipmentStatus=DELIVERED`인 화물은 화면에서 "완료" 뱃지를 우선 표시하고 `trackerStatus`는 참고용으로만 쓴다(트래커가 이미 다음 배송에 재배치됐을 수 있어서).
+`trackerStatus`는 트래커 재사용과 무관하게 항상 그 트래커의 **현재** 최신 상태를 담는다 — `shipmentStatus=DELIVERED`인 화물은 화면에서 "완료" 뱃지를 우선 표시하고 `trackerStatus`는 참고용으로만 쓴다(트래커가 이미 다음 배송에 재배치됐을 수 있어서). `inTransitAt`(M3~)은 배송 현황 탭의 "출발" 이벤트 시각 — 이 값 없이 `IN_TRANSIT`이면(마이그레이션 이전 데이터) 이벤트 목록에서 생략한다.
 
 ### GET /api/v1/summary — 화주 요약 통계 (FR-8 화주 뷰)
 ```json

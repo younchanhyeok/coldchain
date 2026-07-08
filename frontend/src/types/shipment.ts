@@ -16,6 +16,7 @@ export interface ShipmentSummary {
   lastPosition: Position | null
   lastReportedAt: string | null
   createdAt: string
+  inTransitAt: string | null
   deliveredAt: string | null
 }
 
