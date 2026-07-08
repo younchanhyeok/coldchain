@@ -21,5 +21,6 @@ public record ShipmentSummaryResponse(
         PositionResponse lastPosition,
         Instant lastReportedAt,
         Instant createdAt,
+        Instant inTransitAt,
         Instant deliveredAt) {
 }

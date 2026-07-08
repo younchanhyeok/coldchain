@@ -72,6 +72,7 @@ public class ShipmentQueryService {
                 lastPosition,
                 latest != null ? latest.getLastTs() : null,
                 shipment.getCreatedAt(),
+                shipment.getInTransitAt(),
                 shipment.getDeliveredAt());
     }
 }
