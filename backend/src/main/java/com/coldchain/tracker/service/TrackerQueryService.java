@@ -45,6 +45,8 @@ public class TrackerQueryService {
         List<Shipment> shipments = shipmentRepository.findByShipperIdAndStatus(
                 devShipperProvider.shipperId(), shipmentStatus);
 
+        // PERF(M6): N+1 — shipment마다 tracker/latest를 findById로 건당 조회한다(findAllById로
+        // 배치 가능). 지금은 정합성엔 문제없는 순수 성능 이슈라 M6 부하테스트에서 실측 후 고친다.
         List<TrackerSummaryResponse> summaries = shipments.stream()
                 .map(shipment -> toSummary(shipment, findTracker(shipment.getTrackerId())))
                 .filter(summary -> statusFilter == null || summary.status() == statusFilter)
