@@ -91,6 +91,10 @@ public class TrackService {
      * 최근 {@value #ETA_WINDOW_SIZE}개 리딩의 이동거리(각 구간 haversine 합) ÷ 경과시간 =
      * 평균 속도, 남은 직선거리 ÷ 속도 = 도착 예상(분). 직선거리·평균속도 기반 근사치이며
      * 실제 도로 경로 ETA가 아니다. 속도가 정지 판정 임계 이하면 null("계산 불가").
+     *
+     * 편향 방향: 분자(남은 거리)는 목적지까지 직선(ST_Distance)인데 분모(속도)는 지금까지
+     * 실제 주행 경로(구간 haversine 합)로 재서, 도로가 직선이 아닐수록 남은 거리가 실제보다
+     * 짧게 잡혀 ETA가 낙관적으로(실제보다 짧게) 편향된다.
      */
     private Double etaMinutes(List<Reading> chronological, Double remainingDistanceMeters) {
         if (remainingDistanceMeters == null) {

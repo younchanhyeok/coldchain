@@ -13,6 +13,10 @@ import com.coldchain.tracker.dto.PositionResponse;
 import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import com.coldchain.tracker.service.TrackerQueryService;
+import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
+import java.util.stream.Collectors;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -41,17 +45,23 @@ public class ShipmentQueryService {
         Page<Shipment> result = shipmentRepository.findByShipperIdOrderByCreatedAtDesc(
                 devShipperProvider.shipperId(), PageRequest.of(page, size));
 
-        return new ShipmentListResponse(
-                result.getContent().stream().map(this::toSummary).toList(),
-                page, size, result.getTotalElements());
+        // 이 페이지에 속한 트래커/최신상태를 한 번에 모아 조회 — 행마다 findById를 두 번씩
+        // 날리지 않는다(페이지 크기가 곧 쿼리 상한이 되므로 M6 이전엔 이걸로 충분).
+        List<String> trackerIds = result.getContent().stream().map(Shipment::getTrackerId).distinct().toList();
+        Map<String, Tracker> trackersById = trackerRepository.findAllById(trackerIds).stream()
+                .collect(Collectors.toMap(Tracker::getId, Function.identity()));
+        Map<String, TrackerLatest> latestById = trackerLatestRepository.findAllById(trackerIds).stream()
+                .collect(Collectors.toMap(TrackerLatest::getTrackerId, Function.identity()));
+
+        List<ShipmentSummaryResponse> content = result.getContent().stream()
+                .map(shipment -> toSummary(shipment,
+                        trackersById.get(shipment.getTrackerId()), latestById.get(shipment.getTrackerId())))
+                .toList();
+
+        return new ShipmentListResponse(content, page, size, result.getTotalElements());
     }
 
-    private ShipmentSummaryResponse toSummary(Shipment shipment) {
-        Tracker tracker = trackerRepository.findById(shipment.getTrackerId()).orElse(null);
-        TrackerLatest latest = trackerRepository.existsById(shipment.getTrackerId())
-                ? trackerLatestRepository.findById(shipment.getTrackerId()).orElse(null)
-                : null;
-
+    private ShipmentSummaryResponse toSummary(Shipment shipment, Tracker tracker, TrackerLatest latest) {
         TrackerStatus trackerStatus = tracker != null ? trackerQueryService.computeStatus(tracker, latest) : null;
         PositionResponse lastPosition = latest != null && latest.getLastPosition() != null
                 ? new PositionResponse(GeoPoints.lat(latest.getLastPosition()), GeoPoints.lon(latest.getLastPosition()))

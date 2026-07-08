@@ -56,6 +56,9 @@ public class Shipment {
     @Column(name = "created_at", nullable = false, updatable = false)
     private Instant createdAt;
 
+    @Column(name = "in_transit_at")
+    private Instant inTransitAt;
+
     @Column(name = "delivered_at")
     private Instant deliveredAt;
 
@@ -85,7 +88,9 @@ public class Shipment {
             throw new IllegalStateException("허용되지 않는 상태 전이: " + status + " -> " + next);
         }
         this.status = next;
-        if (next == ShipmentStatus.DELIVERED) {
+        if (next == ShipmentStatus.IN_TRANSIT) {
+            this.inTransitAt = Instant.now();
+        } else if (next == ShipmentStatus.DELIVERED) {
             this.deliveredAt = Instant.now();
         }
     }
@@ -140,6 +145,10 @@ public class Shipment {
 
     public Instant getCreatedAt() {
         return createdAt;
+    }
+
+    public Instant getInTransitAt() {
+        return inTransitAt;
     }
 
     public Instant getDeliveredAt() {
