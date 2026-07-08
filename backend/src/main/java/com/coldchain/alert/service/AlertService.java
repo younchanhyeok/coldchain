@@ -1,0 +1,62 @@
+package com.coldchain.alert.service;
+
+import com.coldchain.alert.domain.Alert;
+import com.coldchain.alert.domain.AlertSeverity;
+import com.coldchain.alert.domain.AlertType;
+import com.coldchain.alert.repository.AlertRepository;
+import com.coldchain.detection.domain.AnomalySeverity;
+import com.coldchain.detection.domain.AnomalyType;
+import java.math.BigDecimal;
+import java.util.Locale;
+import org.springframework.stereotype.Service;
+
+@Service
+public class AlertService {
+
+    private final AlertRepository alertRepository;
+    private final AlertDedupService dedupService;
+    private final SlackAlertSender slackAlertSender;
+
+    public AlertService(AlertRepository alertRepository, AlertDedupService dedupService,
+            SlackAlertSender slackAlertSender) {
+        this.alertRepository = alertRepository;
+        this.dedupService = dedupService;
+        this.slackAlertSender = slackAlertSender;
+    }
+
+    public void raiseBreachAlert(String trackerId, BigDecimal temperature, BigDecimal thresholdTemp) {
+        if (!dedupService.tryAcquire(trackerId, AlertType.BREACH)) {
+            return;
+        }
+        String message = String.format(Locale.ROOT, "[긴급] %s 온도 %.1f℃ — 임계 %.1f℃ 초과",
+                trackerId, temperature, thresholdTemp);
+        raise(trackerId, AlertType.BREACH, AlertSeverity.HIGH, temperature, message);
+    }
+
+    public void raiseAnomalyAlert(String trackerId, AnomalyType anomalyType, AnomalySeverity anomalySeverity,
+            String anomalyMessage) {
+        if (!dedupService.tryAcquire(trackerId, AlertType.ANOMALY)) {
+            return;
+        }
+        AlertSeverity severity = anomalySeverity == AnomalySeverity.HIGH ? AlertSeverity.HIGH : AlertSeverity.MEDIUM;
+        String message = String.format(Locale.ROOT, "[주의] %s %s 이상 감지 — %s", trackerId, anomalyType, anomalyMessage);
+        raise(trackerId, AlertType.ANOMALY, severity, null, message);
+    }
+
+    /**
+     * 저장(PENDING) → 발송 시도 → 최종 상태 갱신 순서. Slack 호출을 트랜잭션 안에 두지 않는다 —
+     * 외부 호출 동안 DB 커넥션을 붙잡지 않기 위해 저장을 두 번(INSERT, UPDATE)으로 나눈다.
+     */
+    private void raise(String trackerId, AlertType type, AlertSeverity severity, BigDecimal temperatureAtEvent,
+            String message) {
+        Alert alert = alertRepository.save(Alert.pending(trackerId, type, severity, temperatureAtEvent, message));
+
+        SlackAlertSender.SendResult result = slackAlertSender.send(message);
+        if (result.success()) {
+            alert.markSent(result.retryCount());
+        } else {
+            alert.markFailed(result.retryCount());
+        }
+        alertRepository.save(alert);
+    }
+}

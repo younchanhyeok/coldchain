@@ -69,8 +69,11 @@
 | 트래커 상태 `status` | `SAFE` / `CAUTION` / `RISK` (예측 경고 활성) / `BREACH` (임계 이탈) |
 | 배송 상태 `shipmentStatus` | `READY` / `IN_TRANSIT` / `DELIVERED` |
 | 이상 유형 `anomalyType` | `SUDDEN` (급변) / `GRADUAL` (점진) |
+| 이상 상태 `anomalyStatus` | `ACTIVE` / `CLEARED` (연속 3회 미해당 시 해제) |
 | 예측 상태 `predictionStatus` | `ACTIVE` / `CANCELED` (추세 완화 취소) / `INVALIDATED` (급변 이벤트로 무효화) / `EXPIRED` |
 | 알림 채널 | `SLACK` / `SSE` / `SMS`(목업) |
+| 알림 유형 `alertType` | `BREACH` (임계 이탈) / `ANOMALY` (L2 이상탐지) |
+| 알림 발송 상태 `alertStatus` | `PENDING` (저장됨, 발송 시도 전) / `SENT` / `FAILED` (최대 재시도 후 실패) |
 
 ---
 
@@ -221,6 +224,31 @@
 ```
 `rescuedByPrediction`: 예측 경고 후 임계 미도달로 종료된 건수 — 데모 헤드라인 수치.
 
+### GET /api/v1/alerts — 알림 발송 이력 (FR-6/7, M3)
+쿼리: `trackerId`(선택, 없으면 자사 전체), `page`/`size`(기본 0/20). 알림 탭·화물 관리 상세 패널 공용.
+```json
+// 200
+{
+  "content": [
+    {
+      "id": 12,
+      "trackerId": "TRK-0001",
+      "type": "BREACH",
+      "severity": "HIGH",
+      "temperatureAtEvent": 9.2,
+      "message": "[긴급] TRK-0001 온도 9.2℃ — 임계 8.0℃ 초과",
+      "channel": "SLACK",
+      "status": "SENT",
+      "retryCount": 0,
+      "createdAt": "2026-07-08T02:10:00Z"
+    }
+  ],
+  "page": 0, "size": 20, "totalElements": 1
+}
+```
+`message`는 실제로 Slack에 발송된 payload 원문 그대로 — 알림 탭 "발송 원문 미리보기"가 이 값을 그대로 표시한다. `retryCount`는 최종 상태에 도달하기까지 시도한 재시도 횟수(최초 시도 제외, 최대 2). 저장 순서는 "PENDING 즉시 저장 → 발송 시도 → 최종 상태(SENT/FAILED) 갱신" — Slack이 완전히 죽어도 PENDING 행 자체는 남는다.
+**FR-12의 `GET /api/v1/events`(9절 예약)와는 다른 엔드포인트다**: `/alerts`는 이번에 만든 alert 테이블(발송 이력) 전용이고, `/events`는 v3에서 예측·이상·조치를 아우르는 통합 이벤트 로그로 예약된 별도 개념 — 이름이 비슷해 보이지만 충돌하지 않는다.
+
 ---
 
 ## 5. 실시간 & 예측 내부 연동
@@ -339,7 +367,7 @@
 
 ## 9. v2/v3 예약 (명세 생략, 경로만 예약)
 
-- `GET /api/v1/events` — 알림·이벤트 이력 (FR-12)
+- `GET /api/v1/events` — 예측·이상·조치를 아우르는 통합 이벤트 이력 (FR-12, v3). M3에서 알림 발송 이력은 `GET /api/v1/alerts`(4절)로 먼저 구현됨 — 서로 다른 개념, 이름 유사성에 유의.
 - `GET/PATCH /api/v1/trackers/{id}` 메타 수정, 트래커 목록 관리 확장 (FR-11)
 - `GET /api/v1/admin/**` — 어드민 대시보드 (고객사 수·시스템 지표·모델 지표 화면)
 - `GET /api/v1/shipments/{id}/report` — GDP 규제 리포트 내보내기
@@ -354,8 +382,8 @@
 | FR-1 | `POST /trackers/{id}/readings` |
 | FR-4 | `GET /trackers/{id}/anomalies` + SSE `anomaly` |
 | FR-5 ★ | `GET /trackers/{id}/prediction` + SSE `prediction` + 내부 `/internal/v1/predict` + `GET /admin/metrics/prediction` |
-| FR-6 | SSE `breach` + Slack (API 표면 없음) |
-| FR-7 | Slack 웹훅 (API 표면 없음, alert 테이블 기록) |
+| FR-6 | SSE `breach` + Slack + `GET /alerts` (M3) |
+| FR-7 | Slack 웹훅 + `GET /alerts`(발송 이력·재시도, M3) |
 | FR-8 | 인증 4종 중 2역할(§1.2) + 스코핑 규칙 + `GET /track/{token}` + `GET /summary` |
 | FR-9 | `GET /stream` (SSE) + `GET /trackers` |
 | FR-10 | `GET /trackers/{id}/track` |

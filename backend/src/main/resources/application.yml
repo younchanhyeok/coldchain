@@ -19,6 +19,12 @@ spring:
 server:
   port: ${SERVER_PORT:8080}
 
+app:
+  alert:
+    slack:
+      # 미설정 시 발송을 건너뛰고 FAILED로 기록한다(가짜 성공 처리 안 함) — 로컬/CI 기본값.
+      webhook-url: ${SLACK_WEBHOOK_URL:}
+
 management:
   endpoints:
     web:
