@@ -290,6 +290,7 @@
 | `anomaly` | anomalies 항목 + trackerId | L2 감지 — 활성화(`status=ACTIVE`)·해제(`status=CLEARED`) 전이 시에만 발행(활성 유지 중엔 반복 발행 안 함, M3~) |
 | `prediction` | prediction 응답과 동일 + trackerId | 예측 생성/갱신/취소/무효화 (M4~) |
 | `breach` | trackerId, temperature, thresholdTemp, ts | FR-6 임계 이탈 (정상→초과 전이 시 1회만 발행) |
+| `alert` | id, trackerId, type, severity, status(SENT/FAILED), createdAt | FR-7 알림 최종 상태 확정 시 1회(알림 탭 Live 배지용 — 본문은 담지 않고 GET /alerts로 조회, M3~) |
 | `heartbeat` | serverTs | 15s 간격 (연결 유지) |
 
 ¹ 트래커당 스로틀은 M6 부하테스트 시점에 구현한다(현재는 미적용 — M2는 트래커 수가 적어 필요를 겪지 않음). `anomaly`/`prediction`은 각각 M3/M4에서 그 데이터가 생기기 전까지 발행하지 않는다.

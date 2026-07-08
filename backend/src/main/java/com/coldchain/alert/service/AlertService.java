@@ -3,11 +3,13 @@ package com.coldchain.alert.service;
 import com.coldchain.alert.domain.Alert;
 import com.coldchain.alert.domain.AlertSeverity;
 import com.coldchain.alert.domain.AlertType;
+import com.coldchain.alert.event.AlertRaisedEvent;
 import com.coldchain.alert.repository.AlertRepository;
 import com.coldchain.detection.domain.AnomalySeverity;
 import com.coldchain.detection.domain.AnomalyType;
 import java.math.BigDecimal;
 import java.util.Locale;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
 
 @Service
@@ -16,12 +18,14 @@ public class AlertService {
     private final AlertRepository alertRepository;
     private final AlertDedupService dedupService;
     private final SlackAlertSender slackAlertSender;
+    private final ApplicationEventPublisher eventPublisher;
 
     public AlertService(AlertRepository alertRepository, AlertDedupService dedupService,
-            SlackAlertSender slackAlertSender) {
+            SlackAlertSender slackAlertSender, ApplicationEventPublisher eventPublisher) {
         this.alertRepository = alertRepository;
         this.dedupService = dedupService;
         this.slackAlertSender = slackAlertSender;
+        this.eventPublisher = eventPublisher;
     }
 
     public void raiseBreachAlert(String trackerId, BigDecimal temperature, BigDecimal thresholdTemp) {
@@ -61,5 +65,9 @@ public class AlertService {
             dedupService.release(trackerId, type);
         }
         alertRepository.save(alert);
+
+        eventPublisher.publishEvent(new AlertRaisedEvent(
+                alert.getId(), alert.getTrackerId(), alert.getType(), alert.getSeverity(),
+                alert.getStatus(), alert.getCreatedAt()));
     }
 }
