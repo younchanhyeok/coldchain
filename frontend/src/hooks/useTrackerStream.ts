@@ -91,6 +91,11 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
 
     source.addEventListener('alert', () => setNewAlertCount((count) => count + 1))
 
+    // prediction 이벤트는 에피소드 생성/취소/무효화/만료/적중 전이 시에만 오고(리딩마다가
+    // 아님) 상태 판정(RISK 포함)과 activePrediction 필드가 함께 바뀌므로, reading 이벤트처럼
+    // 부분 patch 대신 전체 재조회로 정확한 최신 상태를 받는다 — 빈도가 낮아 비용도 작다.
+    source.addEventListener('prediction', () => reload())
+
     source.onerror = () => {
       setError(new Error('실시간 연결(SSE)에 문제가 발생했습니다.'))
     }

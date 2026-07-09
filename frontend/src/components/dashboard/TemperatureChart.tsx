@@ -9,9 +9,13 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { getPrediction } from '../../api/prediction'
 import { getReadings } from '../../api/readings'
 import { usePolling } from '../../hooks/usePolling'
+import { withForecast } from '../../lib/forecastChart'
 import type { TrackerSummary } from '../../types/tracker'
+
+const formatTs = (iso: string) => new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 
 const RANGE_OPTIONS = [
   { label: '6시간', hours: 6 },
@@ -43,14 +47,16 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
     [selectedTrackerId, rangeHours],
   )
 
-  const chartData = useMemo(
-    () =>
-      (data?.readings ?? []).map((r) => ({
-        ts: new Date(r.ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        temperature: r.temperature,
-      })),
-    [data],
+  const { data: prediction } = usePolling(
+    () => (selectedTrackerId ? getPrediction(selectedTrackerId) : Promise.resolve(null)),
+    30_000,
+    [selectedTrackerId],
   )
+
+  const chartData = useMemo(() => {
+    const actual = (data?.readings ?? []).map((r) => ({ ts: formatTs(r.ts), temperature: r.temperature }))
+    return withForecast(actual, prediction, formatTs)
+  }, [data, prediction])
 
   return (
     <div
@@ -114,6 +120,16 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
               }}
             />
             <Line type="monotone" dataKey="temperature" name="실측" stroke="#5ea9ff" strokeWidth={2} dot={false} />
+            <Line
+              type="monotone"
+              dataKey="forecastTemperature"
+              name="예측"
+              stroke="#f5a623"
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              connectNulls
+            />
           </LineChart>
         </ResponsiveContainer>
       )}

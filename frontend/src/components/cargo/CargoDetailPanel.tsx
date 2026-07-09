@@ -2,7 +2,7 @@ import { getAlerts } from '../../api/alerts'
 import { getTrack } from '../../api/track'
 import { getTrackerDetail } from '../../api/trackers'
 import { usePolling } from '../../hooks/usePolling'
-import { CargoPredictionPlaceholder } from './CargoPredictionPlaceholder'
+import { CargoPredictionPanel } from './CargoPredictionPanel'
 import { CargoShipmentInfo } from './CargoShipmentInfo'
 import { CargoStatusOverview } from './CargoStatusOverview'
 import { CargoTemperatureChart } from './CargoTemperatureChart'
@@ -55,7 +55,7 @@ export function CargoDetailPanel({ trackerId }: CargoDetailPanelProps) {
       <CargoStatusOverview tracker={tracker} etaMinutes={track?.etaMinutes ?? null} breachStartedAt={breachStartedAt} />
       <CargoShipmentInfo tracker={tracker} />
       <CargoTemperatureChart trackerId={trackerId} thresholdTemp={tracker.thresholdTemp} />
-      <CargoPredictionPlaceholder />
+      <CargoPredictionPanel trackerId={trackerId} />
     </div>
   )
 }
