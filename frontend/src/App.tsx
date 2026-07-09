@@ -7,6 +7,7 @@ import { AlertsPage } from './pages/AlertsPage'
 import { CargoManagementPage } from './pages/CargoManagementPage'
 import { DashboardPage } from './pages/DashboardPage'
 import { LiveOpsMapPage } from './pages/LiveOpsMapPage'
+import { ReportPage } from './pages/ReportPage'
 import { RiskMonitoringPage } from './pages/RiskMonitoringPage'
 
 const TAB_TITLES: Record<Tab, string> = {
@@ -15,6 +16,7 @@ const TAB_TITLES: Record<Tab, string> = {
   alerts: '알림 센터',
   liveops: '배송 현황',
   risk: '위험 모니터링',
+  report: '리포트',
 }
 
 function App() {
@@ -57,8 +59,10 @@ function App() {
         <AlertsPage newAlertCount={newAlertCount} onDismissLiveBadge={resetNewAlertCount} />
       ) : activeTab === 'liveops' ? (
         <LiveOpsMapPage trackers={trackers} loading={loading} error={error} />
-      ) : (
+      ) : activeTab === 'risk' ? (
         <RiskMonitoringPage trackers={trackers} loading={loading} error={error} lastPredictionAt={lastPredictionAt} />
+      ) : (
+        <ReportPage />
       )}
     </DashboardLayout>
   )
