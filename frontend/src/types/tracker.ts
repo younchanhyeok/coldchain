@@ -5,6 +5,13 @@ export interface Position {
   lon: number
 }
 
+export interface ActivePredictionSummary {
+  predictedBreachAt: string
+  // "지금부터 남은 분" — 화면의 "N분 후 이탈"에 그대로 쓴다.
+  leadTimeMinutes: number
+  slopePerMinute: number
+}
+
 export interface TrackerSummary {
   trackerId: string
   shipmentId: number | null
@@ -16,7 +23,7 @@ export interface TrackerSummary {
   lastTemperature: number | null
   lastPosition: Position | null
   lastReportedAt: string | null
-  activePrediction: unknown | null
+  activePrediction: ActivePredictionSummary | null
 }
 
 export interface TrackerListResponse {

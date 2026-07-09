@@ -1,8 +1,10 @@
 import { useEffect, useState } from 'react'
+import { getSummary } from '../api/summary'
 import { KpiTiles } from '../components/dashboard/KpiTiles'
 import { RiskList } from '../components/dashboard/RiskList'
 import { TemperatureChart } from '../components/dashboard/TemperatureChart'
 import { TrackerMap } from '../components/dashboard/TrackerMap'
+import { usePolling } from '../hooks/usePolling'
 import type { TrackerSummary } from '../types/tracker'
 
 interface DashboardPageProps {
@@ -24,6 +26,7 @@ function pickDefaultTracker(trackers: TrackerSummary[]): string | null {
 
 export function DashboardPage({ trackers, loading, error, onNavigateToCargo }: DashboardPageProps) {
   const [selectedTrackerId, setSelectedTrackerId] = useState<string | null>(null)
+  const { data: summary } = usePolling(() => getSummary(), 30_000)
 
   useEffect(() => {
     setSelectedTrackerId((current) => {
@@ -44,7 +47,7 @@ export function DashboardPage({ trackers, loading, error, onNavigateToCargo }: D
 
   return (
     <div className="flex flex-col gap-6">
-      <KpiTiles trackers={trackers} />
+      <KpiTiles trackers={trackers} summary={summary} />
       <div className="grid h-[480px] grid-cols-1 items-stretch gap-6 lg:grid-cols-[2fr_1fr]">
         <RiskList
           trackers={trackers}

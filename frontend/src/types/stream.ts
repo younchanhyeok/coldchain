@@ -1,4 +1,5 @@
 import type { AlertSeverity, AlertStatus, AlertType } from './alert'
+import type { PredictionStatus } from './prediction'
 import type { TrackerStatus } from './tracker'
 
 export interface ReadingStreamEvent {
@@ -17,4 +18,13 @@ export interface AlertStreamEvent {
   severity: AlertSeverity
   status: AlertStatus
   createdAt: string
+}
+
+export interface PredictionStreamEvent {
+  trackerId: string
+  status: PredictionStatus
+  predictedBreachAt: string | null
+  slopePerMinute: number | null
+  modelVersion: string | null
+  createdAt: string | null
 }

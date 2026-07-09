@@ -1,7 +1,10 @@
 import { useMemo } from 'react'
 import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Tooltip, XAxis, YAxis } from 'recharts'
+import { getPrediction } from '../../api/prediction'
 import { getReadings } from '../../api/readings'
 import { usePolling } from '../../hooks/usePolling'
+import { usePredictionRefreshSignal } from '../../hooks/usePredictionRefreshSignal'
+import { withForecast } from '../../lib/forecastChart'
 import { DashboardCard } from '../dashboard/DashboardCard'
 
 interface CargoTemperatureChartProps {
@@ -10,6 +13,8 @@ interface CargoTemperatureChartProps {
 }
 
 const RANGE_HOURS = 6
+
+const formatTs = (iso: string) => new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 
 // 화물 관리 상세 패널 전용 — 트래커가 이미 고정돼 있어 대시보드의 드롭다운/기간버튼은 불필요.
 export function CargoTemperatureChart({ trackerId, thresholdTemp }: CargoTemperatureChartProps) {
@@ -23,14 +28,13 @@ export function CargoTemperatureChart({ trackerId, thresholdTemp }: CargoTempera
     [trackerId],
   )
 
-  const chartData = useMemo(
-    () =>
-      (data?.readings ?? []).map((r) => ({
-        ts: new Date(r.ts).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' }),
-        temperature: r.temperature,
-      })),
-    [data],
-  )
+  const predictionSignal = usePredictionRefreshSignal(trackerId)
+  const { data: prediction } = usePolling(() => getPrediction(trackerId), 30_000, [trackerId, predictionSignal])
+
+  const chartData = useMemo(() => {
+    const actual = (data?.readings ?? []).map((r) => ({ ts: formatTs(r.ts), temperature: r.temperature }))
+    return withForecast(actual, prediction, formatTs)
+  }, [data, prediction])
 
   return (
     <DashboardCard title="온도 추이 (실측)" meta="최근 6시간" bodyClassName="px-7 pb-7">
@@ -55,6 +59,16 @@ export function CargoTemperatureChart({ trackerId, thresholdTemp }: CargoTempera
               />
             )}
             <Line type="monotone" dataKey="temperature" name="실측" stroke="#5ea9ff" strokeWidth={2} dot={false} />
+            <Line
+              type="monotone"
+              dataKey="forecastTemperature"
+              name="예측"
+              stroke="#f5a623"
+              strokeWidth={2}
+              strokeDasharray="5 5"
+              dot={false}
+              connectNulls
+            />
           </LineChart>
         </ResponsiveContainer>
       )}
