@@ -14,6 +14,8 @@ interface TrackerStreamResult {
   /** SSE `alert` 이벤트 누적 건수 — 알림 탭 Live 배지용. */
   newAlertCount: number
   resetNewAlertCount: () => void
+  /** 가장 최근 SSE `prediction` 이벤트 수신 시각 — 위험 모니터링 탭 "최근 분석 N초 전" 표시용. */
+  lastPredictionAt: Date | null
 }
 
 /**
@@ -30,6 +32,7 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
   const [loading, setLoading] = useState(true)
   const [updatedAt, setUpdatedAt] = useState<Date | null>(null)
   const [newAlertCount, setNewAlertCount] = useState(0)
+  const [lastPredictionAt, setLastPredictionAt] = useState<Date | null>(null)
   const statusFilterRef = useRef(statusFilter)
   statusFilterRef.current = statusFilter
 
@@ -100,6 +103,7 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
     source.addEventListener('prediction', (e: MessageEvent<string>) => {
       const payload = JSON.parse(e.data) as PredictionStreamEvent
       emitPredictionEvent(payload.trackerId)
+      setLastPredictionAt(new Date())
       reload()
     })
 
@@ -113,5 +117,5 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
     }
   }, [statusFilter])
 
-  return { trackers, error, loading, updatedAt, newAlertCount, resetNewAlertCount }
+  return { trackers, error, loading, updatedAt, newAlertCount, resetNewAlertCount, lastPredictionAt }
 }
