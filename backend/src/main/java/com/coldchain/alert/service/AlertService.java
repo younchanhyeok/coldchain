@@ -8,6 +8,8 @@ import com.coldchain.alert.repository.AlertRepository;
 import com.coldchain.detection.domain.AnomalySeverity;
 import com.coldchain.detection.domain.AnomalyType;
 import java.math.BigDecimal;
+import java.time.Duration;
+import java.time.Instant;
 import java.util.Locale;
 import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.stereotype.Service;
@@ -45,6 +47,31 @@ public class AlertService {
         AlertSeverity severity = anomalySeverity == AnomalySeverity.HIGH ? AlertSeverity.HIGH : AlertSeverity.MEDIUM;
         String message = String.format(Locale.ROOT, "[주의] %s %s 이상 감지 — %s", trackerId, anomalyType, anomalyMessage);
         raise(trackerId, AlertType.ANOMALY, severity, null, message);
+    }
+
+    /**
+     * FR-5 선제 경고 — "N분 후 이탈 예상". 경계에서의 취소↔재활성 flap 방어를 위해 BREACH/
+     * ANOMALY와 동일하게 dedup을 건다(취소 시 {@link #raisePredictionCanceledAlert}가 해제).
+     */
+    public void raisePredictionAlert(String trackerId, Instant createdAt, Instant predictedBreachAt) {
+        if (!dedupService.tryAcquire(trackerId, AlertType.PREDICTION)) {
+            return;
+        }
+        long minutes = Duration.between(createdAt, predictedBreachAt).toMinutes();
+        String message = String.format(Locale.ROOT, "[예측] %s %d분 후 이탈 예상", trackerId, minutes);
+        raise(trackerId, AlertType.PREDICTION, AlertSeverity.HIGH, null, message);
+    }
+
+    /**
+     * 예측 취소(추세 완화) 통보 — 알림 피로를 줄이는 FR-5의 목적 그대로, 이 알림 자체는 dedup
+     * 없이 항상 보낸다(취소는 에피소드당 정확히 1회만 일어나 반복 발송 위험이 없다). 대신 다음
+     * 경고를 위해 PREDICTION dedup 락을 해제한다 — 안 풀면 취소 후 10분 내 재악화 시 새 경고가
+     * 조용히 억제된다.
+     */
+    public void raisePredictionCanceledAlert(String trackerId) {
+        String message = String.format(Locale.ROOT, "[해제] %s 예측 경고 취소 — 온도 추세 완화됨", trackerId);
+        raise(trackerId, AlertType.PREDICTION_CANCELED, AlertSeverity.MEDIUM, null, message);
+        dedupService.release(trackerId, AlertType.PREDICTION);
     }
 
     /**

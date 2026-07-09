@@ -4,6 +4,7 @@ import com.coldchain.common.DevShipperProvider;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.ResourceNotFoundException;
 import com.coldchain.detection.service.AnomalyQueryService;
+import com.coldchain.prediction.service.PredictionQueryService;
 import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.domain.ShipmentStatus;
 import com.coldchain.shipment.repository.ShipmentRepository;
@@ -30,14 +31,16 @@ public class TrackerQueryService {
     private final ShipmentRepository shipmentRepository;
     private final DevShipperProvider devShipperProvider;
     private final AnomalyQueryService anomalyQueryService;
+    private final PredictionQueryService predictionQueryService;
 
     public TrackerQueryService(TrackerRepository trackerRepository, TrackerLatestRepository trackerLatestRepository,
             ShipmentRepository shipmentRepository, DevShipperProvider devShipperProvider,
-            AnomalyQueryService anomalyQueryService) {
+            AnomalyQueryService anomalyQueryService, PredictionQueryService predictionQueryService) {
         this.trackerRepository = trackerRepository;
         this.trackerLatestRepository = trackerLatestRepository;
         this.shipmentRepository = shipmentRepository;
         this.devShipperProvider = devShipperProvider;
+        this.predictionQueryService = predictionQueryService;
         this.anomalyQueryService = anomalyQueryService;
     }
 
@@ -108,6 +111,11 @@ public class TrackerQueryService {
         }
         if (latest.getLastTemp().compareTo(tracker.getThresholdTemp()) > 0) {
             return TrackerStatus.BREACH;
+        }
+        // RISK: L3가 "N분 후 이탈"을 실제로 예측한 상태 — CAUTION(이상 감지, 방향성 미확정)보다
+        // 구체적이고 심각한 신호라 먼저 검사한다.
+        if (predictionQueryService.hasActivePrediction(tracker.getId())) {
+            return TrackerStatus.RISK;
         }
         // CAUTION: 유형(SUDDEN/GRADUAL) 무관하게 활성 이상탐지가 있으면 "이탈은 아니지만 이상 감지됨"
         if (anomalyQueryService.hasActiveAnomaly(tracker.getId())) {

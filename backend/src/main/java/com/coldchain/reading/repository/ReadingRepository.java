@@ -13,4 +13,7 @@ public interface ReadingRepository extends JpaRepository<Reading, Long> {
 
     List<Reading> findByTrackerIdAndRecordedAtGreaterThanEqualOrderByRecordedAtDesc(
             String trackerId, Instant from, Pageable pageable);
+
+    /** L3 예측 윈도우 — 최근 30개(최신순, 호출부에서 시간순으로 뒤집어 씀). */
+    List<Reading> findTop30ByTrackerIdOrderByRecordedAtDesc(String trackerId);
 }

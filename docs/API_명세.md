@@ -70,9 +70,9 @@
 | 배송 상태 `shipmentStatus` | `READY` / `IN_TRANSIT` / `DELIVERED` |
 | 이상 유형 `anomalyType` | `SUDDEN` (급변) / `GRADUAL` (점진) |
 | 이상 상태 `anomalyStatus` | `ACTIVE` / `CLEARED` (연속 3회 미해당 시 해제) |
-| 예측 상태 `predictionStatus` | `ACTIVE` / `CANCELED` (추세 완화 취소) / `INVALIDATED` (급변 이벤트로 무효화) / `EXPIRED` |
+| 예측 상태 `predictionStatus` | `ACTIVE` / `CANCELED` (추세 완화 취소, 연속 3회 미해당 필요) / `INVALIDATED` (급변 이벤트로 무효화) / `EXPIRED` (예상 시각 경과, 15분 유예) / `BREACHED` (적중 — 실제 이탈, M4) |
 | 알림 채널 | `SLACK` / `SSE` / `SMS`(목업) |
-| 알림 유형 `alertType` | `BREACH` (임계 이탈) / `ANOMALY` (L2 이상탐지) |
+| 알림 유형 `alertType` | `BREACH` (임계 이탈) / `ANOMALY` (L2 이상탐지) / `PREDICTION` (선제 경고, M4) / `PREDICTION_CANCELED` (예측 취소 통보, M4) |
 | 알림 발송 상태 `alertStatus` | `PENDING` (저장됨, 발송 시도 전) / `SENT` / `FAILED` (최대 재시도 후 실패) |
 
 ---
@@ -181,7 +181,7 @@
 ```
 같은 `(trackerId, type)` 조합의 활성 이상은 동시에 최대 1건(`status=ACTIVE`) — 리딩마다 반복 감지돼도 새 행을 만들지 않고, 조건이 연속 3회 미해당이면 `CLEARED`로 닫힌다(`clearedAt` 스탬프). CAUTION 트래커 상태(`GET /trackers`)는 유형 무관하게 `ACTIVE` 이상이 하나라도 있으면 켜진다.
 
-### GET /api/v1/trackers/{trackerId}/prediction — 현재 예측 (FR-5 ★핵심)
+### GET /api/v1/trackers/{trackerId}/prediction — 현재 예측 (FR-5 ★핵심, M4)
 ```json
 // 200 — 활성 예측 있음
 {
@@ -192,13 +192,22 @@
   "slopePerMinute": 0.14,
   "modelVersion": "v1-linear",
   "createdAt": "2026-07-05T03:13:00Z",
-  "forecast": [ { "ts": "2026-07-05T03:15:00Z", "temperature": 6.5 } ]
+  "forecast": [
+    { "ts": "2026-07-05T03:13:00Z", "temperature": 6.06 },
+    { "ts": "2026-07-05T03:27:00Z", "temperature": 8.0 }
+  ]
 }
-// 200 — 예측 없음(안전)
+// 200 — 예측 없음(트래커에 예측 에피소드가 한 번도 없었음)
 { "status": "NONE" }
-// 503 — 예측 서버 장애 (NFR-3): Problem Details + code=PREDICTION_UNAVAILABLE
-//        단, 대시보드 UX를 위해 GET은 503 대신 { "status": "UNAVAILABLE" } 반환 (수집·조회는 무중단 원칙)
 ```
+`status`는 트래커의 **가장 최근 예측 에피소드** 상태를 그대로 보여준다 — `ACTIVE`뿐 아니라 `CANCELED`(추세 완화로 취소)·`INVALIDATED`(급변 감지로 무효화)·`EXPIRED`(예상 시각을 넘기고도 미이탈)·`BREACHED`(적중)도 나올 수 있다("안전한 실패 설계"가 실제로 화면에 보이는 지점). `leadTimeMinutes`(조회 시점부터 남은 분)와 `forecast`(anchor 실측점→임계 도달점 2점 직선 — 선형회귀라 두 점이면 충분)는 **`ACTIVE`일 때만** 채워지고 그 외 상태는 `null`/`[]`다.
+
+이 엔드포인트는 **저장된 상태만 읽는다 — Python을 호출하지 않는다.** 예측 시도 자체는 리딩이 들어올 때(수집 파이프라인 안에서)만 일어나므로, "예측 서버 장애로 조회가 503"이라는 경우가 이 엔드포인트에서는 발생하지 않는다. Python 장애 시의 영향은 "새 예측이 갱신되지 않고 마지막 저장 상태가 계속 보이는 것"뿐이며, 수집·탐지·이 조회 전부 무중단이다(NFR-3).
+
+`leadTimeMinutes`는 두 가지 다른 의미를 혼동하지 않는다 — 이 응답의 값은 "지금부터 남은 분"(화면의 "N분 후 이탈")이고, 평가지표(`GET /admin/metrics/prediction`, M4 PR3)의 리드타임은 "최초 경고가 실제 이탈보다 얼마나 앞섰나"(`breachedAt - createdAt`)로 별개다.
+
+### 내부: Spring → Python 예측 서버 연동 실패 시 동작 (NFR-3)
+Python 예측 서버 호출은 타임아웃 2s·재시도 1회 후에도 실패하면 30초 쿨다운(서킷 오픈) 동안 호출 자체를 생략한다 — 이 리딩은 예측 판정 없이 스킵되고, 수집·저장·L2 이상탐지에는 영향이 없다. 급변(SUDDEN) 이상 감지 시에는 활성 예측을 `INVALIDATED`로 전환한다(선형 추세 가정이 깨졌으므로).
 `forecast[]`: 실측 실선→예측 점선 차트용 (UIUX.png). `INVALIDATED`: 급변 이벤트 감지 시 예측 무효화 — "안전한 실패 설계"의 API 표면.
 
 ### GET /api/v1/trackers/{trackerId}/track — 이동 경로 + 남은 거리 (FR-10, D1)
@@ -289,7 +298,7 @@
 |---|---|---|
 | `reading` | trackerId, temperature, lat, lon, ts, status | 새 측정값 (트래커당 최대 1건/2s로 스로틀¹) |
 | `anomaly` | anomalies 항목 + trackerId | L2 감지 — 활성화(`status=ACTIVE`)·해제(`status=CLEARED`) 전이 시에만 발행(활성 유지 중엔 반복 발행 안 함, M3~) |
-| `prediction` | prediction 응답과 동일 + trackerId | 예측 생성/갱신/취소/무효화 (M4~) |
+| `prediction` | trackerId, status, predictedBreachAt, slopePerMinute, modelVersion, createdAt | 에피소드 생성(ACTIVE)·취소·무효화·만료·적중 전이 시에만 발행(리딩마다의 단순 갱신엔 발행 안 함) — forecast/leadTimeMinutes는 안 담고 조회 시 `GET /prediction`이 재계산(M4~) |
 | `breach` | trackerId, temperature, thresholdTemp, ts | FR-6 임계 이탈 (정상→초과 전이 시 1회만 발행) |
 | `alert` | id, trackerId, type, severity, status(SENT/FAILED), createdAt | FR-7 알림 최종 상태 확정 시 1회(알림 탭 Live 배지용 — 본문은 담지 않고 GET /alerts로 조회, M3~) |
 | `heartbeat` | serverTs | 15s 간격 (연결 유지) |
@@ -309,8 +318,9 @@
   "context": { "ambientTemp": null, "remainingDistanceMeters": null }  // v2 다변량용, MVP는 null
 }
 // 200
-{ "willBreach": true, "predictedBreachAt": "...", "confidence": 0.83, "slopePerMinute": 0.14, "modelVersion": "v1-linear" }
+{ "willBreach": true, "predictedBreachAt": "...", "confidence": null, "slopePerMinute": 0.14, "modelVersion": "v1-linear" }
 ```
+`confidence`는 v1(선형회귀)에서 **항상 null**이다 — 선형회귀는 확률을 산출하지 않으므로 신뢰도를 창작하지 않는다("위험도 96%·Confidence 97%" 표시 거부 원칙과 동일선). 필드 자체는 v2(확률 기반 모델)를 위해 계약에 미리 남겨둔다.
 - 타임아웃 2s, 재시도 1회, 실패 시 circuit open → 예측 스킵하고 수집·탐지는 계속 (NFR-3).
 - `context`를 처음부터 계약에 포함 → M7 다변량 확장 시 인터페이스 불변.
 
