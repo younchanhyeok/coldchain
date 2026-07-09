@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useState } from 'react'
 import { getPredictionMetrics, hasAdminKey } from '../api/adminMetrics'
 import { getSummary } from '../api/summary'
 import { ReportExecutiveSummary } from '../components/report/ReportExecutiveSummary'
@@ -19,16 +19,18 @@ const PERIOD_OPTIONS: { label: string; hours: number | null }[] = [
 export function ReportPage() {
   const [periodHours, setPeriodHours] = useState<number | null>(null)
 
-  const { from, to } = useMemo(() => {
-    const now = new Date()
-    const from = periodHours == null ? new Date(0) : new Date(now.getTime() - periodHours * 60 * 60 * 1000)
-    return { from: from.toISOString(), to: now.toISOString() }
-  }, [periodHours])
-
+  // from/to는 폴링 틱마다 새로 계산한다 — useMemo로 밖에서 고정하면 30초 폴링이 페이지를
+  // 연 시점의 창을 반복 조회해, 열어둔 뒤 생긴 새 에피소드가 프리셋을 다시 누르기 전까지
+  // 안 보인다.
   const { data: metrics, error } = usePolling(
-    () => (hasAdminKey ? getPredictionMetrics({ from, to }) : Promise.resolve(null)),
+    () => {
+      if (!hasAdminKey) return Promise.resolve(null)
+      const now = new Date()
+      const from = periodHours == null ? new Date(0) : new Date(now.getTime() - periodHours * 60 * 60 * 1000)
+      return getPredictionMetrics({ from: from.toISOString(), to: now.toISOString() })
+    },
     30_000,
-    [from, to],
+    [periodHours],
   )
   const { data: summary } = usePolling(() => getSummary(), 30_000)
 

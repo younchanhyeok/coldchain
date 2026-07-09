@@ -68,7 +68,7 @@ public class PredictionService {
     }
 
     /** L2 SUDDEN 활성화 시 호출 — 급변으로 선형 추세 가정이 깨졌으므로 예측을 신뢰할 수 없다. */
-    public void invalidate(String trackerId, Instant ts) {
+    public void invalidate(String trackerId) {
         Object lock = trackerLocks.computeIfAbsent(trackerId, id -> new Object());
         synchronized (lock) {
             transactionTemplate.executeWithoutResult(status -> invalidateLocked(trackerId));
