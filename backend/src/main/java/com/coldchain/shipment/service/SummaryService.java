@@ -1,6 +1,8 @@
 package com.coldchain.shipment.service;
 
 import com.coldchain.common.DevShipperProvider;
+import com.coldchain.prediction.domain.PredictionStatus;
+import com.coldchain.prediction.repository.PredictionRepository;
 import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.domain.ShipmentStatus;
 import com.coldchain.shipment.dto.SummaryResponse;
@@ -21,13 +23,16 @@ public class SummaryService {
     private final TrackerRepository trackerRepository;
     private final TrackerLatestRepository trackerLatestRepository;
     private final DevShipperProvider devShipperProvider;
+    private final PredictionRepository predictionRepository;
 
     public SummaryService(ShipmentRepository shipmentRepository, TrackerRepository trackerRepository,
-            TrackerLatestRepository trackerLatestRepository, DevShipperProvider devShipperProvider) {
+            TrackerLatestRepository trackerLatestRepository, DevShipperProvider devShipperProvider,
+            PredictionRepository predictionRepository) {
         this.shipmentRepository = shipmentRepository;
         this.trackerRepository = trackerRepository;
         this.trackerLatestRepository = trackerLatestRepository;
         this.devShipperProvider = devShipperProvider;
+        this.predictionRepository = predictionRepository;
     }
 
     public SummaryResponse getSummary() {
@@ -54,8 +59,11 @@ public class SummaryService {
 
         Integer avgDeliveryMinutes = averageDeliveryMinutes(shipments);
 
-        // M3엔 예측이 없어 0(생략이 아니라 정직한 0) — M4에서 값만 배선 교체
-        return new SummaryResponse(totalShipments, inTransit, breachCount, deliveredCount, 0, avgDeliveryMinutes);
+        int rescuedByPrediction = (int) predictionRepository.countByStatusIn(
+                List.of(PredictionStatus.CANCELED, PredictionStatus.EXPIRED));
+
+        return new SummaryResponse(
+                totalShipments, inTransit, breachCount, deliveredCount, rescuedByPrediction, avgDeliveryMinutes);
     }
 
     // BREACH 여부만 필요하므로 CAUTION 판정(활성 이상탐지 조회까지 포함하는

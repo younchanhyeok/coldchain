@@ -33,6 +33,11 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
     }
 
+    @ExceptionHandler(AdminUnauthorizedException.class)
+    public ProblemDetail handleAdminUnauthorized(AdminUnauthorizedException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
+    }
+
     @ExceptionHandler(OutOfOrderConflictException.class)
     public ProblemDetail handleOutOfOrderConflict(OutOfOrderConflictException ex) {
         return problem(HttpStatus.CONFLICT, "READING_OUT_OF_ORDER", ex.getMessage());
