@@ -13,9 +13,9 @@ def window(temps: list[float], interval_minutes: float = 1.0) -> list[ReadingPoi
 
 
 def test_rising_trend_within_horizon_predicts_breach():
-    # 0분에 4도, 1분마다 1도씩 상승 — 8도 임계까지 4분 남음
-    w = window([4.0, 5.0, 6.0, 7.0])
-    result = predict(w, threshold_temp=8.0)
+    # 0분부터 1분마다 1도씩 상승, 5개 리딩(MIN_WINDOW_SIZE) — 8도 임계까지 4분 남음
+    w = window([4.0, 5.0, 6.0, 7.0, 8.0])
+    result = predict(w, threshold_temp=9.0)
 
     assert result.will_breach is True
     assert result.predicted_breach_at is not None
@@ -25,7 +25,7 @@ def test_rising_trend_within_horizon_predicts_breach():
 
 
 def test_flat_trend_does_not_predict_breach():
-    w = window([4.0, 4.0, 4.0, 4.0])
+    w = window([4.0, 4.0, 4.0, 4.0, 4.0])
     result = predict(w, threshold_temp=8.0)
 
     assert result.will_breach is False
@@ -33,7 +33,7 @@ def test_flat_trend_does_not_predict_breach():
 
 
 def test_falling_trend_does_not_predict_breach():
-    w = window([10.0, 8.0, 6.0, 4.0])
+    w = window([10.0, 8.0, 6.0, 4.0, 2.0])
     result = predict(w, threshold_temp=8.0)
 
     assert result.will_breach is False
@@ -41,7 +41,7 @@ def test_falling_trend_does_not_predict_breach():
 
 def test_already_over_threshold_is_not_l3_job():
     # L2/FR-6이 이미 확정 이탈로 처리하는 영역 — L3는 "아직 안 넘었지만 넘을 것"만 예측한다
-    w = window([9.0, 9.5, 10.0])
+    w = window([7.0, 8.0, 9.0, 9.5, 10.0])
     result = predict(w, threshold_temp=8.0)
 
     assert result.will_breach is False
@@ -49,7 +49,7 @@ def test_already_over_threshold_is_not_l3_job():
 
 def test_slow_rise_beyond_horizon_does_not_predict_breach():
     # 매우 완만한 상승 — 임계 도달까지 120분을 훨씬 초과
-    w = window([4.0, 4.01, 4.02, 4.03], interval_minutes=10.0)
+    w = window([4.0, 4.01, 4.02, 4.03, 4.04], interval_minutes=10.0)
     result = predict(w, threshold_temp=8.0)
 
     assert result.will_breach is False
@@ -57,7 +57,9 @@ def test_slow_rise_beyond_horizon_does_not_predict_breach():
 
 
 def test_insufficient_window_does_not_predict_breach():
-    w = window([5.0])
+    # MIN_WINDOW_SIZE(5) 미만 — 표본이 적으면 노이즈 한 쌍의 우연한 기울기로 오탐이 나므로
+    # L2의 콜드 스타트 가드와 동일하게 판정 자체를 스킵한다.
+    w = window([4.0, 8.0, 5.0, 9.0])
     result = predict(w, threshold_temp=8.0)
 
     assert result.will_breach is False
@@ -71,7 +73,7 @@ def test_empty_window_does_not_crash():
 
 
 def test_predicted_breach_at_is_within_horizon():
-    w = window([4.0, 5.0, 6.0, 7.0])
-    result = predict(w, threshold_temp=8.0)
+    w = window([4.0, 5.0, 6.0, 7.0, 8.0])
+    result = predict(w, threshold_temp=9.0)
 
     assert result.predicted_breach_at <= w[-1].ts + timedelta(minutes=MAX_HORIZON_MINUTES)

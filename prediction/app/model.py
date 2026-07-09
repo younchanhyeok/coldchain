@@ -13,7 +13,10 @@ from sklearn.linear_model import LinearRegression
 
 MODEL_VERSION = "v1-linear"
 MAX_HORIZON_MINUTES = 120.0
-MIN_WINDOW_SIZE = 2
+# L2(AnomalyDetectionService.MIN_WINDOW_SIZE)와 동일한 값 — 표본 2~3개의 선형회귀는
+# 노이즈 평활이 사실상 0이라(뉴턴 냉각 시뮬레이터 노이즈 ±0.15℃), 리딩 한 쌍의 우연한
+# 기울기가 그대로 허위 예측(오탐률 저하)으로 이어진다.
+MIN_WINDOW_SIZE = 5
 
 
 @dataclass

@@ -17,12 +17,13 @@ def test_predict_endpoint_rising_window():
         "/internal/v1/predict",
         json={
             "trackerId": "TRK-0001",
-            "thresholdTemp": 8.0,
+            "thresholdTemp": 9.0,
             "window": [
                 {"ts": "2026-01-01T00:00:00Z", "temperature": 4.0},
                 {"ts": "2026-01-01T00:01:00Z", "temperature": 5.0},
                 {"ts": "2026-01-01T00:02:00Z", "temperature": 6.0},
                 {"ts": "2026-01-01T00:03:00Z", "temperature": 7.0},
+                {"ts": "2026-01-01T00:04:00Z", "temperature": 8.0},
             ],
             "context": None,
         },
@@ -45,6 +46,9 @@ def test_predict_endpoint_flat_window():
             "window": [
                 {"ts": "2026-01-01T00:00:00Z", "temperature": 4.0},
                 {"ts": "2026-01-01T00:01:00Z", "temperature": 4.0},
+                {"ts": "2026-01-01T00:02:00Z", "temperature": 4.0},
+                {"ts": "2026-01-01T00:03:00Z", "temperature": 4.0},
+                {"ts": "2026-01-01T00:04:00Z", "temperature": 4.0},
             ],
         },
     )
