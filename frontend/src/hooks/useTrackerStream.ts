@@ -3,7 +3,7 @@ import { BASE_URL } from '../api/client'
 import { getTrackers } from '../api/trackers'
 import type { StatusFilter } from '../components/layout/TopBar'
 import type { PredictionStreamEvent, ReadingStreamEvent } from '../types/stream'
-import type { TrackerSummary } from '../types/tracker'
+import type { TrackerStatus, TrackerSummary } from '../types/tracker'
 import { emitPredictionEvent } from './usePredictionRefreshSignal'
 
 interface TrackerStreamResult {
@@ -71,14 +71,22 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
       let missing = false
 
       setTrackers((current) => {
-        const next = current.map((t) => {
+        const next = current.map((t): TrackerSummary => {
           if (t.trackerId !== payload.trackerId) return t
+          // reading 이벤트의 status는 서버가 리딩당 DB 조회 없이 계산한 값이라 BREACH/SAFE
+          // 두 가지뿐이다 — 그대로 덮어쓰면 RISK(활성 예측)·CAUTION(활성 이상)이 다음 리딩에
+          // SAFE로 지워진다. 그래서 BREACH 축의 전이만 반영한다: BREACH 진입은 즉시,
+          // BREACH 해제는 일단 SAFE로(실제 RISK/CAUTION 여부는 다음 reload가 교정),
+          // 그 외에는 기존 상태 유지. RISK/CAUTION 전이 자체는 prediction/anomaly 이벤트의
+          // reload가 담당한다.
+          const status: TrackerStatus =
+            payload.status === 'BREACH' ? 'BREACH' : t.status === 'BREACH' ? payload.status : t.status
           return {
             ...t,
             lastTemperature: payload.temperature,
             lastPosition: { lat: payload.lat, lon: payload.lon },
             lastReportedAt: payload.ts,
-            status: payload.status,
+            status,
           }
         })
         missing = !current.some((t) => t.trackerId === payload.trackerId)
@@ -106,6 +114,10 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
       setLastPredictionAt(new Date())
       reload()
     })
+
+    // anomaly 이벤트(활성화/해제 전이)도 CAUTION 상태를 바꾸므로 같은 방식으로 전체 재조회한다.
+    // reading patch는 BREACH 축만 다루기 때문에(위 주석), CAUTION의 시의성은 이 구독이 담당한다.
+    source.addEventListener('anomaly', () => reload())
 
     source.onerror = () => {
       setError(new Error('실시간 연결(SSE)에 문제가 발생했습니다.'))

@@ -36,7 +36,7 @@ public class PredictionListener {
     @EventListener
     public void onAnomalyDetected(AnomalyDetectedEvent event) {
         if (event.type() == AnomalyType.SUDDEN && event.status() == AnomalyStatus.ACTIVE) {
-            predictionService.invalidate(event.trackerId(), event.ts());
+            predictionService.invalidate(event.trackerId());
         }
     }
 }
