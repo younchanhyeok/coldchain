@@ -18,11 +18,13 @@ import type { TrackerSummary } from '../../types/tracker'
 
 const formatTs = (iso: string) => new Date(iso).toLocaleTimeString('ko-KR', { hour: '2-digit', minute: '2-digit' })
 
+// 시뮬레이터가 보통 수십 분 단위로 도는 데모 데이터 특성상, 시간 단위 프리셋(6~48시간)은
+// 전부 같은 결과를 반환해 버튼이 눈에 띄게 다르지 않았다 — 분 단위로 좁혀 실제 체감 차이를 낸다.
 const RANGE_OPTIONS = [
-  { label: '6시간', hours: 6 },
-  { label: '12시간', hours: 12 },
-  { label: '24시간', hours: 24 },
-  { label: '48시간', hours: 48 },
+  { label: '1분', minutes: 1 },
+  { label: '5분', minutes: 5 },
+  { label: '10분', minutes: 10 },
+  { label: '1시간', minutes: 60 },
 ]
 
 interface TemperatureChartProps {
@@ -32,20 +34,20 @@ interface TemperatureChartProps {
 }
 
 export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker }: TemperatureChartProps) {
-  const [rangeHours, setRangeHours] = useState(24)
+  const [rangeMinutes, setRangeMinutes] = useState(60)
   const selectedTracker = trackers.find((t) => t.trackerId === selectedTrackerId) ?? null
 
-  // 폴링 대상은 선택된 트래커 하나의 시계열뿐이다. trackerId/rangeHours가 바뀌면
+  // 폴링 대상은 선택된 트래커 하나의 시계열뿐이다. trackerId/rangeMinutes가 바뀌면
   // usePolling의 deps로 인해 기존 타이머가 정리되고 새로 시작된다.
   const { data } = usePolling(
     () => {
       if (!selectedTrackerId) return Promise.resolve(null)
       const to = new Date()
-      const from = new Date(to.getTime() - rangeHours * 60 * 60 * 1000)
+      const from = new Date(to.getTime() - rangeMinutes * 60 * 1000)
       return getReadings(selectedTrackerId, from.toISOString(), to.toISOString())
     },
     30_000,
-    [selectedTrackerId, rangeHours],
+    [selectedTrackerId, rangeMinutes],
   )
 
   const predictionSignal = usePredictionRefreshSignal(selectedTrackerId)
@@ -82,12 +84,12 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
           <div className="flex gap-1">
             {RANGE_OPTIONS.map((opt) => (
               <button
-                key={opt.hours}
+                key={opt.minutes}
                 type="button"
                 className={`rounded-md px-2 py-1 text-xs ${
-                  rangeHours === opt.hours ? 'bg-primary/20 text-primary' : 'text-neutral-500 hover:bg-card-hover'
+                  rangeMinutes === opt.minutes ? 'bg-primary/20 text-primary' : 'text-neutral-500 hover:bg-card-hover'
                 }`}
-                onClick={() => setRangeHours(opt.hours)}
+                onClick={() => setRangeMinutes(opt.minutes)}
               >
                 {opt.label}
               </button>
