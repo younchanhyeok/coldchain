@@ -2,5 +2,7 @@ package com.coldchain.alert.domain;
 
 public enum AlertType {
     BREACH,
-    ANOMALY
+    ANOMALY,
+    PREDICTION,
+    PREDICTION_CANCELED
 }

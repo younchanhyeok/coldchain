@@ -4,6 +4,7 @@ import com.coldchain.alert.service.AlertService;
 import com.coldchain.detection.domain.AnomalyStatus;
 import com.coldchain.detection.event.AnomalyDetectedEvent;
 import com.coldchain.ingest.event.ReadingRecordedEvent;
+import com.coldchain.prediction.event.PredictionChangedEvent;
 import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Async;
 import org.springframework.stereotype.Component;
@@ -40,6 +41,21 @@ public class AlertListener {
         // 해제(CLEARED) 전이는 알림 대상이 아니다 — 활성화될 때만 알린다.
         if (event.status() == AnomalyStatus.ACTIVE) {
             alertService.raiseAnomalyAlert(event.trackerId(), event.type(), event.severity(), event.message());
+        }
+    }
+
+    // PredictionChangedEvent도 예측 트랜잭션 안에서 발행되므로 동일하게 AFTER_COMMIT.
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onPredictionChanged(PredictionChangedEvent event) {
+        switch (event.status()) {
+            case ACTIVE -> alertService.raisePredictionAlert(
+                    event.trackerId(), event.createdAt(), event.predictedBreachAt());
+            case CANCELED -> alertService.raisePredictionCanceledAlert(event.trackerId());
+            // INVALIDATED는 ANOMALY 알림이 이미 담당, EXPIRED·BREACHED는 조용한 종결(BREACHED는
+            // 곧이어 BREACH 알림이 별도로 발행됨) — 별도 알림 없음.
+            default -> {
+            }
         }
     }
 }

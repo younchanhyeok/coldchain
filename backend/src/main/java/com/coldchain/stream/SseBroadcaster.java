@@ -4,9 +4,11 @@ import com.coldchain.alert.event.AlertRaisedEvent;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.detection.event.AnomalyDetectedEvent;
 import com.coldchain.ingest.event.ReadingRecordedEvent;
+import com.coldchain.prediction.event.PredictionChangedEvent;
 import com.coldchain.stream.dto.AlertStreamEvent;
 import com.coldchain.stream.dto.AnomalyStreamEvent;
 import com.coldchain.stream.dto.BreachStreamEvent;
+import com.coldchain.stream.dto.PredictionStreamEvent;
 import com.coldchain.stream.dto.ReadingStreamEvent;
 import com.coldchain.tracker.domain.TrackerStatus;
 import java.time.Instant;
@@ -78,6 +80,15 @@ public class SseBroadcaster {
     public void onAlertRaised(AlertRaisedEvent event) {
         broadcast("alert", new AlertStreamEvent(
                 event.id(), event.trackerId(), event.type(), event.severity(), event.status(), event.createdAt()));
+    }
+
+    // 예측 트랜잭션 커밋 후에만 브로드캐스트 — anomaly와 동일한 이유.
+    @Async
+    @TransactionalEventListener(phase = TransactionPhase.AFTER_COMMIT, fallbackExecution = true)
+    public void onPredictionChanged(PredictionChangedEvent event) {
+        broadcast("prediction", new PredictionStreamEvent(
+                event.trackerId(), event.status(), event.predictedBreachAt(), event.slopePerMinute(),
+                event.modelVersion(), event.createdAt()));
     }
 
     @Scheduled(fixedRate = 15_000)
