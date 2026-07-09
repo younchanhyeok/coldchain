@@ -1,5 +1,6 @@
-import { AlertTriangle, CheckCircle2, ThermometerSun, Truck } from 'lucide-react'
+import { CheckCircle2, Truck } from 'lucide-react'
 import { useMemo } from 'react'
+import { ALERT_TYPE_ICON, ALERT_TYPE_LABEL, ALERT_TYPE_TONE } from '../../lib/alertPresentation'
 import type { Alert } from '../../types/alert'
 import type { ShipmentSummary } from '../../types/shipment'
 import { DashboardCard } from '../dashboard/DashboardCard'
@@ -30,9 +31,9 @@ export function LiveOpsRecentEvents({ shipment, alerts }: LiveOpsRecentEventsPro
     for (const a of alerts) {
       list.push({
         ts: a.createdAt,
-        label: a.type === 'BREACH' ? '임계 이탈 감지' : '이상 감지 · 알림 발송',
-        icon: a.type === 'BREACH' ? AlertTriangle : ThermometerSun,
-        tone: a.type === 'BREACH' ? 'text-danger' : 'text-warning',
+        label: ALERT_TYPE_LABEL[a.type],
+        icon: ALERT_TYPE_ICON[a.type],
+        tone: ALERT_TYPE_TONE[a.type],
       })
     }
     return list.sort((x, y) => new Date(y.ts).getTime() - new Date(x.ts).getTime()).slice(0, 8)

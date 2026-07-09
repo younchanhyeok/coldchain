@@ -1,14 +1,10 @@
 import { CheckCircle2, Circle, XCircle } from 'lucide-react'
+import { ALERT_TYPE_LABEL } from '../../lib/alertPresentation'
 import type { Alert } from '../../types/alert'
 import { DashboardCard } from '../dashboard/DashboardCard'
 
 interface AlertDetailPanelProps {
   alert: Alert | null
-}
-
-const TYPE_LABEL: Record<Alert['type'], string> = {
-  BREACH: '임계 이탈',
-  ANOMALY: '이상 감지',
 }
 
 const STATUS_LABEL: Record<Alert['status'], string> = {
@@ -42,7 +38,7 @@ export function AlertDetailPanel({ alert }: AlertDetailPanelProps) {
           </dd>
 
           <dt className="text-neutral-500">유형</dt>
-          <dd className="text-neutral-200">{TYPE_LABEL[alert.type]}</dd>
+          <dd className="text-neutral-200">{ALERT_TYPE_LABEL[alert.type]}</dd>
 
           {/* 채널 라벨은 정직하게 [SLACK]만 — SMS/알림톡은 미구현(FR-7 문서 그대로) */}
           <dt className="text-neutral-500">채널</dt>

@@ -1,6 +1,6 @@
-import { AlertTriangle, ThermometerSun } from 'lucide-react'
 import { getAlerts } from '../../api/alerts'
 import { usePolling } from '../../hooks/usePolling'
+import { ALERT_TYPE_ICON, ALERT_TYPE_LABEL, ALERT_TYPE_TONE } from '../../lib/alertPresentation'
 import type { Alert } from '../../types/alert'
 import { DashboardCard } from '../dashboard/DashboardCard'
 
@@ -31,14 +31,14 @@ export function CargoAlertHistory({ trackerId }: CargoAlertHistoryProps) {
       ) : (
         <ul className="space-y-3">
           {alerts.map((a) => {
-            const Icon = a.type === 'BREACH' ? AlertTriangle : ThermometerSun
-            const iconTone = a.type === 'BREACH' ? 'text-danger' : 'text-warning'
+            const Icon = ALERT_TYPE_ICON[a.type]
+            const iconTone = ALERT_TYPE_TONE[a.type]
             return (
               <li key={a.id} className="flex items-start gap-3">
                 <Icon size={16} className={`mt-0.5 shrink-0 ${iconTone}`} />
                 <div className="min-w-0 flex-1">
                   <div className="flex items-center justify-between gap-2 text-sm text-neutral-200">
-                    <span>{a.type === 'BREACH' ? '임계 이탈' : '이상 감지'}</span>
+                    <span>{ALERT_TYPE_LABEL[a.type]}</span>
                     <span className="text-xs text-neutral-500">
                       {new Date(a.createdAt).toLocaleString('ko-KR')}
                     </span>

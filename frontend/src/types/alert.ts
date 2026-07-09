@@ -1,4 +1,4 @@
-export type AlertType = 'BREACH' | 'ANOMALY'
+export type AlertType = 'BREACH' | 'ANOMALY' | 'PREDICTION' | 'PREDICTION_CANCELED'
 export type AlertSeverity = 'HIGH' | 'MEDIUM'
 export type AlertChannel = 'SLACK'
 export type AlertStatus = 'PENDING' | 'SENT' | 'FAILED'
