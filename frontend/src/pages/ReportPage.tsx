@@ -69,10 +69,8 @@ export function ReportPage() {
 
       <ReportKpiCards metrics={metrics} rescuedByPrediction={summary?.rescuedByPrediction ?? null} />
       <ReportExecutiveSummary metrics={metrics} />
-      <div className="grid grid-cols-1 gap-6 lg:grid-cols-[3fr_2fr]">
-        <ReportScenarioTable episodes={metrics?.episodes ?? []} />
-        <ReportRescueChart episodes={metrics?.episodes ?? []} />
-      </div>
+      <ReportScenarioTable episodes={metrics?.episodes ?? []} />
+      <ReportRescueChart episodes={metrics?.episodes ?? []} />
     </div>
   )
 }
