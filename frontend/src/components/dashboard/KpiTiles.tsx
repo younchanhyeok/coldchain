@@ -12,11 +12,10 @@ export function KpiTiles({ trackers, summary }: KpiTilesProps) {
   const inTransitCount = trackers.length
   const breachCount = trackers.filter((t) => t.status === 'BREACH').length
 
-  // 이탈률 = 진행 중 배송 중 현재 이탈 상태인 비율(스냅샷) — GET /summary의 기존 필드 두 개로
-  // 프론트에서 계산한다(신규 백엔드 집계 불필요). 진행 중 배송이 없으면 정의 자체가 안 되므로 "—".
-  const breachRate = summary && summary.inTransit > 0
-    ? `${Math.round((summary.breachCount / summary.inTransit) * 100)}%`
-    : null
+  // 이탈률 = 진행 중 배송 중 현재 이탈 상태인 비율(스냅샷). "이탈 위험" 타일과 반드시 같은
+  // 소스(trackers, SSE 기반)로 계산한다 — summary.breachCount/inTransit(REST 폴링)를 쓰면
+  // 조회 시점이 달라 두 타일이 미세하게 어긋날 수 있다. 진행 중 배송이 없으면 "—".
+  const breachRate = inTransitCount > 0 ? `${Math.round((breachCount / inTransitCount) * 100)}%` : null
 
   return (
     <div className="grid grid-cols-2 gap-6 md:grid-cols-4">
