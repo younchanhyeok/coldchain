@@ -86,6 +86,10 @@ public class PredictionMetricsService {
     private int countMissedBreaches(Instant from, Instant to) {
         List<BreachEvent> breachEvents = breachEventRepository.findByTsBetweenOrderByTsAsc(from, to);
 
+        // (trackerId, ts) 정확 일치로 매칭한다 — PredictionService.handleBreach()가 breach_event와
+        // Prediction.breachedAt에 같은 event.recordedAt() 값을 그대로 넘기므로 두 Instant는
+        // 항상 비트 단위로 같다는 전제다. breachedAt을 이 소스와 독립적으로 다시 계산/보정하는
+        // 코드가 생기면 이 매칭은 깨진다 — 그때는 시간 윈도우 매칭으로 바꿔야 한다.
         Set<String> predictedKeys = predictionRepository
                 .findByStatusAndBreachedAtBetween(PredictionStatus.BREACHED, from, to).stream()
                 .map(p -> p.getTrackerId() + "@" + p.getBreachedAt())
@@ -107,6 +111,8 @@ public class PredictionMetricsService {
         return missed;
     }
 
+    // PERF(M6): N+1 — episodes마다 tracker를 findById로 건당 조회한다(findAllById로 배치
+    // 가능). 어드민 전용·저빈도 호출이라 지금은 무시 가능한 수준 — 부하테스트에서 실측 후 고친다.
     private EpisodeSummary toEpisodeSummary(Prediction prediction) {
         String productName = trackerRepository.findById(prediction.getTrackerId())
                 .map(tracker -> tracker.getProductName())
