@@ -8,9 +8,9 @@
 
 ## 데모
 
-![데모](docs/demo.gif)
+> `docs/demo.gif`는 아직 캡처 전 — M4(예측 점선·위험 모니터링·리포트 탭) 반영한 새 데모 GIF 촬영 필요.
 
-*M2 완료 시점 — 시뮬레이터(정상 트래커 + 급변/sudden-failure 트래커)를 돌리면 화주 대시보드의 위험 리스트·지도 마커·온도 차트가 SSE로 실시간 갱신된다.*
+시뮬레이터(gradual-rise + sudden-failure 트래커)를 돌리면 화주 대시보드·위험 모니터링 탭에서 예측 점선(실측 실선→예측 점선)이 실시간으로 그려지고, 급변 감지 시 `INVALIDATED` 배지로 즉시 전환되는 것을 확인할 수 있다.
 
 ## 핵심 기능
 
@@ -58,9 +58,9 @@
 | M0 | 기반 공사 — 리포·DB 스키마 v1·docker-compose·CI | `docker compose up` 한 방에 빈 시스템 기동 | 완료 |
 | M1 | 최소 파이프라인 — 시뮬레이터→수집→저장→조회 | 시뮬레이터 50개 데이터가 DB에 쌓이고 API로 조회 | 완료 |
 | M2 | 실시간 대시보드 — SSE·지도·온도 차트 | 지도 마커가 움직이고 차트가 실시간으로 흐름 | 완료 |
-| M3 | 이상탐지(L2) — 임계+통계 탐지·Slack 알림 | 급상승 시나리오에 Slack 경고 도착 | - |
-| M4 | 예측(L3) ★핵심 — 선형회귀 예측·선제 경고·평가지표 | 예측 성능이 리드타임·오탐률 수치로 측정됨 | - |
-| M5 | 역할 멀티뷰 — JWT·매직링크·인가 스코핑 테스트 | 같은 배송을 역할별 다른 화면·범위로 조회 | - |
+| M3 | 이상탐지(L2) — 임계+통계 탐지·Slack 알림 | 급상승 시나리오에 Slack 경고 도착 | 완료 |
+| M4 | 예측(L3) ★핵심 — 선형회귀 예측·선제 경고·평가지표 | 예측 성능이 리드타임·오탐률 수치로 측정됨 | 완료 |
+| M5 | 역할 멀티뷰 — JWT·매직링크·인가 스코핑 테스트 | 같은 배송을 역할별 다른 화면·범위로 조회 | 진행 중 |
 | M6 | 스케일 — 부하테스트→Kafka·Timescale 전환 | 개선 전/후 수치 비교 리포트 | - |
 | M7 | 예측 심화 — 다변량·평가 자동화 | v1 vs v2 모델 수치 비교 | - |
 
@@ -69,8 +69,8 @@
 ```bash
 docker compose -f infra/docker-compose.yml up -d   # PG(+PostGIS)·Redis·(M6~)Kafka
 cd backend && ./gradlew bootRun
-cd prediction && uvicorn app.main:app --port 8000   # M4~ 구현 예정, 아직 없음
-cd frontend && npm install && npm run dev            # .env.example 복사 후 VITE_KAKAO_MAP_KEY 채워야 지도가 뜸
+cd prediction && uvicorn app.main:app --port 8000    # 최초 1회 pip install -r requirements.txt 필요
+cd frontend && npm install && npm run dev            # .env.example 복사 — VITE_KAKAO_MAP_KEY(지도), VITE_ADMIN_KEY(리포트 탭, 백엔드 ADMIN_KEY와 동일값)
 ```
 
 시뮬레이터(최초 1회 `pip install -r requirements.txt` 필요):
@@ -82,6 +82,11 @@ python run.py --trackers 50 --interval 5 --profile normal --target http://localh
 # 정상 트래커 + 급변(sudden-failure) 트래커를 섞어 돌리면 대시보드에서 SAFE→BREACH 실시간 전이를 볼 수 있다
 python run.py --trackers 40 --interval 5 --profile normal --target http://localhost:8080
 python run.py --trackers 10 --interval 5 --profile sudden-failure --target http://localhost:8080
+
+# M4 데모 두 갈래 — gradual-rise: 선제 경고(RISK·예측 점선)→실제 이탈(적중),
+#                  sudden-failure: 급변 감지 시 예측 INVALIDATED + 즉시 알림 전환(안전한 실패)
+python run.py --trackers 1 --interval 3 --profile gradual-rise --target http://localhost:8080
+python run.py --trackers 1 --interval 3 --profile sudden-failure --target http://localhost:8080
 ```
 
 API 계약은 [`docs/API_명세.md`](docs/API_명세.md) 참고.
