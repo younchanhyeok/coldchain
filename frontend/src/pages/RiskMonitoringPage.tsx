@@ -37,6 +37,9 @@ export function RiskMonitoringPage({ trackers, loading, error, lastPredictionAt 
   const { data: summary } = usePolling(() => getSummary(), 30_000)
   const { data: alertList } = usePolling(() => getAlerts({ size: 30 }), 30_000)
   const recentAlerts = useMemo(() => alertList?.content ?? [], [alertList])
+  // "최근 이벤트"(뭘 감지했나)와 달리 "수행된 조치"는 완료된 행동만 — PENDING(발송 시도 중)은
+  // 아직 "한 일"이 아니므로 뺀다. 같은 이력을 라벨만 바꿔 두 번 보여주는 느낌을 줄인다.
+  const completedActions = useMemo(() => recentAlerts.filter((a) => a.status !== 'PENDING'), [recentAlerts])
 
   useEffect(() => {
     setSelectedTrackerId((current) => {
@@ -77,7 +80,7 @@ export function RiskMonitoringPage({ trackers, loading, error, lastPredictionAt 
         />
         <RiskAlertPanel
           title="수행된 조치"
-          alerts={recentAlerts}
+          alerts={completedActions}
           describe={describeAction}
           emptyMessage="수행된 조치가 없습니다."
         />
