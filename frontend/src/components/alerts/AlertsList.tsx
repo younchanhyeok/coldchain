@@ -1,4 +1,4 @@
-import { AlertTriangle, ThermometerSun } from 'lucide-react'
+import { ALERT_TYPE_ICON, ALERT_TYPE_LABEL, ALERT_TYPE_TONE } from '../../lib/alertPresentation'
 import type { Alert } from '../../types/alert'
 import { DashboardCard } from '../dashboard/DashboardCard'
 
@@ -22,8 +22,8 @@ export function AlertsList({ alerts, selectedAlertId, onSelectAlert }: AlertsLis
       ) : (
         <ul className="space-y-2">
           {alerts.map((a) => {
-            const Icon = a.type === 'BREACH' ? AlertTriangle : ThermometerSun
-            const iconTone = a.type === 'BREACH' ? 'text-danger' : 'text-warning'
+            const Icon = ALERT_TYPE_ICON[a.type]
+            const iconTone = ALERT_TYPE_TONE[a.type]
             return (
               <li key={a.id}>
                 <button
@@ -43,7 +43,7 @@ export function AlertsList({ alerts, selectedAlertId, onSelectAlert }: AlertsLis
                     </div>
                     <div className="mt-1 flex items-center gap-2 text-xs text-neutral-400">
                       <span className={`h-1.5 w-1.5 rounded-full ${STATUS_DOT[a.status]}`} />
-                      {a.type === 'BREACH' ? '임계 이탈' : '이상 감지'}
+                      {ALERT_TYPE_LABEL[a.type]}
                       {a.temperatureAtEvent != null ? ` · ${a.temperatureAtEvent.toFixed(1)}℃` : ''}
                     </div>
                   </div>

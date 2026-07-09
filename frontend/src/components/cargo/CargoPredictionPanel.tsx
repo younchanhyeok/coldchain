@@ -37,7 +37,10 @@ function buildMessage(prediction: PredictionResponse | null): string {
     case 'ACTIVE': {
       const trend = slopeText ? `최근 온도가 ${slopeText}로 오르는 중` : '온도 상승 추세 감지'
       if (leadTimeMinutes == null || thresholdTemp == null || !predictedBreachAt) return trend
-      return `${trend} → 이 추세면 약 ${Math.round(leadTimeMinutes)}분 후 ${thresholdTemp.toFixed(1)}℃ 초과 예상 (${formatTime(predictedBreachAt)})`
+      // predictedBreachAt이 이미 지났는데 아직 EXPIRED 판정 전인 짧은 과도 구간엔 leadTimeMinutes가
+      // 음수일 수 있다("약 -6분 후" 같은 문구는 정직하지 않은 게 아니라 그냥 어색하므로 "곧"으로).
+      const timing = leadTimeMinutes <= 0 ? '곧' : `약 ${Math.round(leadTimeMinutes)}분 후`
+      return `${trend} → 이 추세면 ${timing} ${thresholdTemp.toFixed(1)}℃ 초과 예상 (${formatTime(predictedBreachAt)})`
     }
     case 'CANCELED':
       if (!warnedAt || !slopeText) return '추세 완화로 예측 해제됨'

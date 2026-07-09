@@ -1,14 +1,15 @@
-export type Tab = 'dashboard' | 'cargo' | 'alerts' | 'liveops'
+export type Tab = 'dashboard' | 'cargo' | 'alerts' | 'liveops' | 'risk'
 
-// 화면_탭_구성.md 확정 순서: 대시보드 → 화물 관리 → 알림 → 리포트 → 배송 현황.
-// 위험 모니터링은 "M3엔 사이드바 미노출"이 확정 사항이라 M4 전까지 목록에서 아예 뺀다.
+// 화면_탭_구성.md 확정 순서: 대시보드 → 화물 관리 → 알림 → 리포트 → 배송 현황 → 위험 모니터링.
+// 위험 모니터링은 데이터 전부가 M4 예측 산물이라 M4에 한 번에 노출한다("M3엔 사이드바 미노출" 확정 사항 종료).
 // 설정 탭은 채울 실체가 없어 삭제 확정.
 const NAV_ITEMS: { label: string; tab: Tab | null }[] = [
   { label: '대시보드', tab: 'dashboard' },
   { label: '화물 관리', tab: 'cargo' },
   { label: '알림', tab: 'alerts' },
-  { label: '리포트', tab: null }, // M4
+  { label: '리포트', tab: null }, // M4 PR6
   { label: '배송 현황', tab: 'liveops' },
+  { label: '위험 모니터링', tab: 'risk' },
 ]
 
 interface SidebarProps {

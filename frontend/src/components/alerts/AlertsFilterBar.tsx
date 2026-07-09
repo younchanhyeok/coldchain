@@ -1,4 +1,7 @@
-export type AlertTypeFilter = '' | 'BREACH' | 'ANOMALY'
+import { ALERT_TYPE_LABEL } from '../../lib/alertPresentation'
+import type { AlertType } from '../../types/alert'
+
+export type AlertTypeFilter = '' | AlertType
 export type AlertPeriodFilter = 'today' | 'all'
 
 interface AlertsFilterBarProps {
@@ -38,8 +41,10 @@ export function AlertsFilterBar({
           onChange={(e) => onTypeFilterChange(e.target.value as AlertTypeFilter)}
         >
           <option value="">전체 유형</option>
-          <option value="BREACH">임계 이탈</option>
-          <option value="ANOMALY">이상 감지</option>
+          <option value="BREACH">{ALERT_TYPE_LABEL.BREACH}</option>
+          <option value="ANOMALY">{ALERT_TYPE_LABEL.ANOMALY}</option>
+          <option value="PREDICTION">{ALERT_TYPE_LABEL.PREDICTION}</option>
+          <option value="PREDICTION_CANCELED">{ALERT_TYPE_LABEL.PREDICTION_CANCELED}</option>
         </select>
         <select
           className="h-11 rounded-control border border-border bg-card px-3 text-sm text-neutral-200"
