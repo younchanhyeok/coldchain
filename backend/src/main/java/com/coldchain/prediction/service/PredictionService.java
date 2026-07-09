@@ -22,10 +22,14 @@ import org.springframework.transaction.support.TransactionTemplate;
 
 /**
  * L3 예측 라이프사이클 — 생성(ACTIVE)·갱신·취소(CANCELED)·무효화(INVALIDATED)·만료(EXPIRED)·
- * 적중(BREACHED). 트래커별 락으로 같은 트래커 이벤트를 직렬화한 뒤 락 "안에서" 트랜잭션을 연다
- * (@Transactional이면 프록시가 락보다 먼저 트랜잭션=커넥션을 잡아 대기 스레드가 커넥션을 쥔 채
- * 블록될 수 있다 — M3 사전검토에서 확립한 패턴). {@link PredictionChangedEvent}는 트랜잭션
- * 커밋 후에만 소비되도록(AFTER_COMMIT) 구독 측이 설계돼 있어, 커밋 실패 시 유령 알림이 없다.
+ * 적중(BREACHED). 트래커별 락으로 같은 트래커 이벤트를 직렬화하고, DB 쓰기는 락 "안에서" 짧은
+ * 트랜잭션으로 연다(@Transactional이면 프록시가 락보다 먼저 트랜잭션=커넥션을 잡아 대기 스레드가
+ * 커넥션을 쥔 채 블록될 수 있다 — M3 사전검토에서 확립한 패턴). {@link PredictionChangedEvent}는
+ * 트랜잭션 커밋 후에만 소비되도록(AFTER_COMMIT) 구독 측이 설계돼 있어, 커밋 실패 시 유령 알림이
+ * 없다. Python 호출({@link PredictionClient#predict})은 **트랜잭션 밖**에서 한다 — AlertService가
+ * Slack 호출을 트랜잭션 밖에 두는 것과 같은 이유로, 외부 호출(최대 2s×2회) 동안 DB 커넥션을
+ * 쥐고 있으면 안 된다. 트래커별 락은 HTTP 대기 시간을 포함해 계속 쥔다(같은 트래커의 다음 리딩과
+ * 순서만 직렬화할 뿐 DB 커넥션과 무관한 자원이라 오래 쥐어도 커넥션 풀을 잠식하지 않는다).
  */
 @Service
 public class PredictionService {
@@ -59,7 +63,7 @@ public class PredictionService {
     public void analyze(ReadingRecordedEvent event) {
         Object lock = trackerLocks.computeIfAbsent(event.trackerId(), id -> new Object());
         synchronized (lock) {
-            transactionTemplate.executeWithoutResult(status -> analyzeLocked(event));
+            analyzeLocked(event); // 트랜잭션은 이 안에서 필요한 구간만 짧게 연다(HTTP 호출 제외)
         }
     }
 
@@ -93,19 +97,13 @@ public class PredictionService {
         boolean isBreached = event.temperature().compareTo(event.thresholdTemp()) > 0;
 
         if (isBreached) {
-            if (event.justBreached()) {
-                breachEventRepository.save(new BreachEvent(trackerId, event.recordedAt()));
-                predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE)
-                        .ifPresent(prediction -> {
-                            prediction.markBreached(event.recordedAt());
-                            publishChanged(prediction);
-                        });
-            }
+            // HTTP 호출이 없는 순수 DB 경로라 트랜잭션으로 감싸도 커넥션을 오래 쥐지 않는다.
+            transactionTemplate.executeWithoutResult(status -> handleBreach(event));
             return; // 확정 이탈 동안은 L3가 관여하지 않는다 — L2/FR-6의 영역
         }
 
-        Optional<Prediction> active = predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE);
-
+        // 윈도우 조회는 로컬 DB 왕복뿐이라 트랜잭션 밖에서 해도 무방 — 문제는 이 다음의 Python
+        // 호출이다.
         List<Reading> recent = readingRepository.findTop30ByTrackerIdOrderByRecordedAtDesc(trackerId);
         if (recent.size() < MIN_WINDOW_SIZE) {
             return; // 콜드 스타트 가드 — L2와 동일한 원칙
@@ -116,11 +114,33 @@ public class PredictionService {
                 .map(r -> new PredictionClient.WindowPoint(r.getRecordedAt(), r.getTemperature()))
                 .toList();
 
+        // Python 호출 — 트랜잭션 밖(최대 2s×2회 걸릴 수 있는 외부 I/O 동안 DB 커넥션을 쥐지 않는다).
         Optional<PredictionClient.Result> resultOpt = predictionClient.predict(trackerId, event.thresholdTemp(), window);
         if (resultOpt.isEmpty()) {
             return; // 예측 서버 장애·쿨다운 — 이번 리딩은 스킵(NFR-3: 수집·탐지엔 영향 없음)
         }
-        PredictionClient.Result result = resultOpt.get();
+
+        // 결과를 반영하는 짧은 트랜잭션. ACTIVE 조회를 HTTP 호출 이후로 미룬 것도 트랜잭션을
+        // 최대한 짧게 유지하기 위함 — 트래커별 락이 이미 이 구간 전체를 직렬화하므로 안전하다.
+        transactionTemplate.executeWithoutResult(status -> applyResult(event, resultOpt.get()));
+    }
+
+    private void handleBreach(ReadingRecordedEvent event) {
+        String trackerId = event.trackerId();
+        if (!event.justBreached()) {
+            return;
+        }
+        breachEventRepository.save(new BreachEvent(trackerId, event.recordedAt()));
+        predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE)
+                .ifPresent(prediction -> {
+                    prediction.markBreached(event.recordedAt());
+                    publishChanged(prediction);
+                });
+    }
+
+    private void applyResult(ReadingRecordedEvent event, PredictionClient.Result result) {
+        String trackerId = event.trackerId();
+        Optional<Prediction> active = predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE);
 
         if (!result.willBreach()) {
             active.ifPresent(prediction -> {
