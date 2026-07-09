@@ -12,6 +12,7 @@ import {
 import { getPrediction } from '../../api/prediction'
 import { getReadings } from '../../api/readings'
 import { usePolling } from '../../hooks/usePolling'
+import { usePredictionRefreshSignal } from '../../hooks/usePredictionRefreshSignal'
 import { withForecast } from '../../lib/forecastChart'
 import type { TrackerSummary } from '../../types/tracker'
 
@@ -47,10 +48,11 @@ export function TemperatureChart({ trackers, selectedTrackerId, onSelectTracker 
     [selectedTrackerId, rangeHours],
   )
 
+  const predictionSignal = usePredictionRefreshSignal(selectedTrackerId)
   const { data: prediction } = usePolling(
     () => (selectedTrackerId ? getPrediction(selectedTrackerId) : Promise.resolve(null)),
     30_000,
-    [selectedTrackerId],
+    [selectedTrackerId, predictionSignal],
   )
 
   const chartData = useMemo(() => {

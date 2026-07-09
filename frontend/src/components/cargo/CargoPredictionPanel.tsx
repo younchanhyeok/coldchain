@@ -1,6 +1,7 @@
 import { Sparkles } from 'lucide-react'
 import { getPrediction } from '../../api/prediction'
 import { usePolling } from '../../hooks/usePolling'
+import { usePredictionRefreshSignal } from '../../hooks/usePredictionRefreshSignal'
 import type { PredictionStatus } from '../../types/prediction'
 import { DashboardCard } from '../dashboard/DashboardCard'
 
@@ -29,7 +30,8 @@ const STATUS_MESSAGE: Record<PredictionStatus, string> = {
 }
 
 export function CargoPredictionPanel({ trackerId }: CargoPredictionPanelProps) {
-  const { data: prediction } = usePolling(() => getPrediction(trackerId), 30_000, [trackerId])
+  const predictionSignal = usePredictionRefreshSignal(trackerId)
+  const { data: prediction } = usePolling(() => getPrediction(trackerId), 30_000, [trackerId, predictionSignal])
 
   const status = prediction?.status ?? 'NONE'
   const badge = STATUS_BADGE[status]

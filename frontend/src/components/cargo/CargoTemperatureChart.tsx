@@ -3,6 +3,7 @@ import { CartesianGrid, Line, LineChart, ReferenceLine, ResponsiveContainer, Too
 import { getPrediction } from '../../api/prediction'
 import { getReadings } from '../../api/readings'
 import { usePolling } from '../../hooks/usePolling'
+import { usePredictionRefreshSignal } from '../../hooks/usePredictionRefreshSignal'
 import { withForecast } from '../../lib/forecastChart'
 import { DashboardCard } from '../dashboard/DashboardCard'
 
@@ -27,7 +28,8 @@ export function CargoTemperatureChart({ trackerId, thresholdTemp }: CargoTempera
     [trackerId],
   )
 
-  const { data: prediction } = usePolling(() => getPrediction(trackerId), 30_000, [trackerId])
+  const predictionSignal = usePredictionRefreshSignal(trackerId)
+  const { data: prediction } = usePolling(() => getPrediction(trackerId), 30_000, [trackerId, predictionSignal])
 
   const chartData = useMemo(() => {
     const actual = (data?.readings ?? []).map((r) => ({ ts: formatTs(r.ts), temperature: r.temperature }))

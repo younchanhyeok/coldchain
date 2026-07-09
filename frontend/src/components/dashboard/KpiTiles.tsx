@@ -41,7 +41,7 @@ export function KpiTiles({ trackers, summary }: KpiTilesProps) {
         tone="success"
         label="구조된 박스"
         value={summary ? String(summary.rescuedByPrediction) : '—'}
-        sub="예측 경고 후 이탈 없이 종료된 건수"
+        sub="예측 경고 후 이탈 없이 종료된 건수 포함"
         hasValue={summary != null}
       />
       <KpiTile

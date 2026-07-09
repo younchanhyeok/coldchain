@@ -2,8 +2,9 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import { BASE_URL } from '../api/client'
 import { getTrackers } from '../api/trackers'
 import type { StatusFilter } from '../components/layout/TopBar'
-import type { ReadingStreamEvent } from '../types/stream'
+import type { PredictionStreamEvent, ReadingStreamEvent } from '../types/stream'
 import type { TrackerSummary } from '../types/tracker'
+import { emitPredictionEvent } from './usePredictionRefreshSignal'
 
 interface TrackerStreamResult {
   trackers: TrackerSummary[]
@@ -94,7 +95,13 @@ export function useTrackerStream(statusFilter: StatusFilter): TrackerStreamResul
     // prediction 이벤트는 에피소드 생성/취소/무효화/만료/적중 전이 시에만 오고(리딩마다가
     // 아님) 상태 판정(RISK 포함)과 activePrediction 필드가 함께 바뀌므로, reading 이벤트처럼
     // 부분 patch 대신 전체 재조회로 정확한 최신 상태를 받는다 — 빈도가 낮아 비용도 작다.
-    source.addEventListener('prediction', () => reload())
+    // 동시에 해당 트래커 id를 emitPredictionEvent로 재발행해, 차트/AI패널의 getPrediction
+    // 30초 폴링이 다음 주기를 기다리지 않고 즉시 갱신되게 한다(무효화 시 점선 지연 제거).
+    source.addEventListener('prediction', (e: MessageEvent<string>) => {
+      const payload = JSON.parse(e.data) as PredictionStreamEvent
+      emitPredictionEvent(payload.trackerId)
+      reload()
+    })
 
     source.onerror = () => {
       setError(new Error('실시간 연결(SSE)에 문제가 발생했습니다.'))
