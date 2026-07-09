@@ -120,7 +120,9 @@ public class PredictionMetricsService {
         Integer leadTimeMinutes = prediction.getStatus() == PredictionStatus.BREACHED && prediction.getBreachedAt() != null
                 ? (int) Duration.between(prediction.getCreatedAt(), prediction.getBreachedAt()).toMinutes()
                 : null;
-        return new EpisodeSummary(prediction.getTrackerId(), productName, prediction.getStatus().name(), leadTimeMinutes);
+        return new EpisodeSummary(
+                prediction.getTrackerId(), productName, prediction.getStatus().name(), leadTimeMinutes,
+                prediction.getCreatedAt());
     }
 
     private Double average(List<Long> values) {

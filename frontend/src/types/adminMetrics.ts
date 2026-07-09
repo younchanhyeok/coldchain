@@ -3,6 +3,7 @@ export interface PredictionEpisodeSummary {
   productName: string
   status: 'ACTIVE' | 'CANCELED' | 'INVALIDATED' | 'EXPIRED' | 'BREACHED'
   leadTimeMinutes: number | null
+  createdAt: string
 }
 
 export interface PredictionMetricsResponse {
