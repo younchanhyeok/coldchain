@@ -4,6 +4,7 @@ import com.coldchain.common.DevShipperProvider;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.ResourceNotFoundException;
 import com.coldchain.detection.service.AnomalyQueryService;
+import com.coldchain.prediction.dto.ActivePredictionSummary;
 import com.coldchain.prediction.service.PredictionQueryService;
 import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.domain.ShipmentStatus;
@@ -88,7 +89,11 @@ public class TrackerQueryService {
                 ? new PositionResponse(GeoPoints.lat(latest.getLastPosition()), GeoPoints.lon(latest.getLastPosition()))
                 : null;
 
-        TrackerStatus status = computeStatus(tracker, latest);
+        // activePrediction과 RISK 판정은 같은 쿼리 결과를 공유한다 — 따로따로 부르면
+        // (hasActivePrediction + findActiveSummary) 트래커 하나당 같은 조회가 중복된다.
+        ActivePredictionSummary activePrediction = predictionQueryService.findActiveSummary(tracker.getId())
+                .orElse(null);
+        TrackerStatus status = computeStatus(tracker, latest, activePrediction != null);
 
         return new TrackerSummaryResponse(
                 tracker.getId(),
@@ -101,11 +106,15 @@ public class TrackerQueryService {
                 latest != null ? latest.getLastTemp() : null,
                 lastPosition,
                 latest != null ? latest.getLastTs() : null,
-                null);
+                activePrediction);
     }
 
     /** shipment 목록(ShipmentQueryService) 등 다른 서비스에서도 같은 판정 로직을 재사용한다. */
     public TrackerStatus computeStatus(Tracker tracker, TrackerLatest latest) {
+        return computeStatus(tracker, latest, predictionQueryService.hasActivePrediction(tracker.getId()));
+    }
+
+    private TrackerStatus computeStatus(Tracker tracker, TrackerLatest latest, boolean hasActivePrediction) {
         if (latest == null || latest.getLastTemp() == null) {
             return TrackerStatus.SAFE;
         }
@@ -114,7 +123,7 @@ public class TrackerQueryService {
         }
         // RISK: L3가 "N분 후 이탈"을 실제로 예측한 상태 — CAUTION(이상 감지, 방향성 미확정)보다
         // 구체적이고 심각한 신호라 먼저 검사한다.
-        if (predictionQueryService.hasActivePrediction(tracker.getId())) {
+        if (hasActivePrediction) {
             return TrackerStatus.RISK;
         }
         // CAUTION: 유형(SUDDEN/GRADUAL) 무관하게 활성 이상탐지가 있으면 "이탈은 아니지만 이상 감지됨"

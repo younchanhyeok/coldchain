@@ -2,12 +2,14 @@ package com.coldchain.prediction.service;
 
 import com.coldchain.prediction.domain.Prediction;
 import com.coldchain.prediction.domain.PredictionStatus;
+import com.coldchain.prediction.dto.ActivePredictionSummary;
 import com.coldchain.prediction.dto.ForecastPoint;
 import com.coldchain.prediction.dto.PredictionResponse;
 import com.coldchain.prediction.repository.PredictionRepository;
 import java.time.Duration;
 import java.time.Instant;
 import java.util.List;
+import java.util.Optional;
 import org.springframework.stereotype.Service;
 
 /**
@@ -33,6 +35,19 @@ public class PredictionQueryService {
     /** 트래커 상태(SAFE/CAUTION/RISK/BREACH) 판정용 — tracker 도메인이 service 레이어로 호출한다. */
     public boolean hasActivePrediction(String trackerId) {
         return predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE).isPresent();
+    }
+
+    /**
+     * 트래커 목록/상세의 activePrediction 필드 — {@link #hasActivePrediction}과 별개 쿼리다.
+     * 한 트래커 요약을 만들 때 이 둘을 모두 부르면 같은 조회가 중복되므로, 호출부(TrackerQueryService)는
+     * 이 메서드의 결과 하나로 상태 판정(RISK 여부)과 필드 채움을 모두 해결한다.
+     */
+    public Optional<ActivePredictionSummary> findActiveSummary(String trackerId) {
+        return predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE)
+                .map(p -> new ActivePredictionSummary(
+                        p.getPredictedBreachAt(),
+                        (int) Duration.between(Instant.now(), p.getPredictedBreachAt()).toMinutes(),
+                        p.getSlopePerMinute()));
     }
 
     private PredictionResponse toResponse(Prediction prediction) {
