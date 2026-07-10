@@ -1,4 +1,5 @@
 import { apiGet } from './client'
+import type { AdminOverviewResponse } from '../types/adminOverview'
 import type { PredictionMetricsResponse } from '../types/adminMetrics'
 
 // 어드민 전용 엔드포인트라 X-Admin-Key가 필요하다(백엔드 기본값은 미설정=항상 401).
@@ -14,6 +15,13 @@ export function getPredictionMetrics(params: {
   modelVersion?: string
 }): Promise<PredictionMetricsResponse> {
   return apiGet<PredictionMetricsResponse>('/api/v1/admin/metrics/prediction', params, {
+    skipAuth: true,
+    headers: ADMIN_KEY ? { 'X-Admin-Key': ADMIN_KEY } : {},
+  })
+}
+
+export function getAdminOverview(): Promise<AdminOverviewResponse> {
+  return apiGet<AdminOverviewResponse>('/api/v1/admin/overview', undefined, {
     skipAuth: true,
     headers: ADMIN_KEY ? { 'X-Admin-Key': ADMIN_KEY } : {},
   })

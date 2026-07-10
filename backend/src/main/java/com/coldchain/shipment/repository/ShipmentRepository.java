@@ -24,4 +24,8 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     // GET /summary 집계용 — 화주 전체 shipment(상태 무관)
     List<Shipment> findByShipperId(Long shipperId);
+
+    // GET /admin/overview — 트래커당 비-DELIVERED shipment는 최대 1건(생성 시 existsByTrackerIdAndStatusNot로
+    // 보장)이라 이 카운트가 곧 "활성 트래커 수"다.
+    long countByStatusNot(ShipmentStatus status);
 }

@@ -2,6 +2,20 @@ import { clearTokens, getAccessToken, getRefreshToken, setTokens } from '../lib/
 
 export const BASE_URL = import.meta.env.VITE_API_BASE_URL ?? 'http://localhost:8080'
 
+// RFC 7807 ProblemDetail의 code(예: MAGIC_LINK_EXPIRED, RESOURCE_NOT_FOUND)까지 실어 나른다 —
+// 매직링크 뷰처럼 401/404를 서로 다른 안내 문구로 분기해야 하는 화면에서 status만으론 부족하다.
+export class ApiError extends Error {
+  status: number
+  code?: string
+
+  constructor(message: string, status: number, code?: string) {
+    super(message)
+    this.name = 'ApiError'
+    this.status = status
+    this.code = code
+  }
+}
+
 interface RequestOptions {
   /** 인증 헤더 자동 주입과 401 시 refresh 재시도를 건너뛴다 — 로그인/refresh 자체, 매직링크
    *  뷰(/t/{token})나 어드민 키 전용 엔드포인트처럼 애초에 JWT 개념이 없는 요청에 쓴다. */
@@ -39,6 +53,17 @@ export function refreshAccessToken(): Promise<boolean> {
     })
   }
   return refreshPromise
+}
+
+async function throwApiError(response: Response, url: URL): Promise<never> {
+  let code: string | undefined
+  try {
+    const body = await response.clone().json()
+    code = typeof body?.code === 'string' ? body.code : undefined
+  } catch {
+    // ProblemDetail이 아닌 응답(빈 본문 등) — code 없이 진행
+  }
+  throw new ApiError(`API 요청 실패: ${response.status} ${url.pathname}`, response.status, code)
 }
 
 function redirectToLogin(): void {
@@ -79,7 +104,7 @@ export async function apiGet<T>(
 
   const response = await fetchWithAuth(url, {}, options)
   if (!response.ok) {
-    throw new Error(`API 요청 실패: ${response.status} ${url.pathname}`)
+    await throwApiError(response, url)
   }
   return response.json() as Promise<T>
 }
@@ -96,7 +121,7 @@ export async function apiPost<T>(path: string, body?: unknown, options: RequestO
     options,
   )
   if (!response.ok) {
-    throw new Error(`API 요청 실패: ${response.status} ${url.pathname}`)
+    await throwApiError(response, url)
   }
   return response.json() as Promise<T>
 }
