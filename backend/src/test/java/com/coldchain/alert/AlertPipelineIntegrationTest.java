@@ -7,6 +7,7 @@ import static org.mockito.Mockito.when;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.coldchain.DefaultShipperAuthConfig;
 import com.coldchain.TestcontainersConfiguration;
 import com.coldchain.alert.domain.Alert;
 import com.coldchain.alert.domain.AlertStatus;
@@ -34,7 +35,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, DefaultShipperAuthConfig.class})
 class AlertPipelineIntegrationTest {
 
     @Autowired

@@ -10,6 +10,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.coldchain.DefaultShipperAuthConfig;
 import com.coldchain.TestcontainersConfiguration;
 import com.coldchain.prediction.domain.PredictionStatus;
 import com.coldchain.prediction.repository.PredictionRepository;
@@ -31,7 +32,7 @@ import org.springframework.test.web.servlet.MockMvc;
 
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, DefaultShipperAuthConfig.class})
 class PredictionControllerTest {
 
     @Autowired

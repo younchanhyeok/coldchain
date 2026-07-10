@@ -1,6 +1,6 @@
 package com.coldchain.shipment.service;
 
-import com.coldchain.common.DevShipperProvider;
+import com.coldchain.auth.AuthenticatedUserProvider;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.DuplicateResourceException;
 import com.coldchain.common.error.ResourceNotFoundException;
@@ -19,13 +19,13 @@ public class ShipmentService {
 
     private final ShipmentRepository shipmentRepository;
     private final TrackerRepository trackerRepository;
-    private final DevShipperProvider devShipperProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
     public ShipmentService(ShipmentRepository shipmentRepository, TrackerRepository trackerRepository,
-            DevShipperProvider devShipperProvider) {
+            AuthenticatedUserProvider authenticatedUserProvider) {
         this.shipmentRepository = shipmentRepository;
         this.trackerRepository = trackerRepository;
-        this.devShipperProvider = devShipperProvider;
+        this.authenticatedUserProvider = authenticatedUserProvider;
     }
 
     @Transactional
@@ -38,7 +38,7 @@ public class ShipmentService {
         }
 
         Shipment shipment = new Shipment(
-                devShipperProvider.shipperId(),
+                authenticatedUserProvider.shipperId(),
                 request.trackerId(),
                 request.productName(),
                 GeoPoints.of(request.origin().lat(), request.origin().lon()),
@@ -55,7 +55,7 @@ public class ShipmentService {
 
     @Transactional
     public ShipmentResponse updateStatus(Long shipmentId, ShipmentStatus nextStatus) {
-        Shipment shipment = shipmentRepository.findById(shipmentId)
+        Shipment shipment = shipmentRepository.findByIdAndShipperId(shipmentId, authenticatedUserProvider.shipperId())
                 .orElseThrow(() -> new ResourceNotFoundException("배송을 찾을 수 없습니다: " + shipmentId));
 
         try {

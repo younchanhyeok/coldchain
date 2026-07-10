@@ -1,6 +1,6 @@
 package com.coldchain.tracker.service;
 
-import com.coldchain.common.DevShipperProvider;
+import com.coldchain.auth.AuthenticatedUserProvider;
 import com.coldchain.common.error.DuplicateResourceException;
 import com.coldchain.tracker.domain.Tracker;
 import com.coldchain.tracker.dto.TrackerRegisterRequest;
@@ -24,11 +24,11 @@ public class TrackerService {
     private static final SecureRandom RANDOM = new SecureRandom();
 
     private final TrackerRepository trackerRepository;
-    private final DevShipperProvider devShipperProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
 
-    public TrackerService(TrackerRepository trackerRepository, DevShipperProvider devShipperProvider) {
+    public TrackerService(TrackerRepository trackerRepository, AuthenticatedUserProvider authenticatedUserProvider) {
         this.trackerRepository = trackerRepository;
-        this.devShipperProvider = devShipperProvider;
+        this.authenticatedUserProvider = authenticatedUserProvider;
     }
 
     public TrackerRegisterResponse register(TrackerRegisterRequest request) {
@@ -39,7 +39,7 @@ public class TrackerService {
         String deviceKey = generateDeviceKey();
         Tracker tracker = new Tracker(
                 request.trackerId(),
-                devShipperProvider.shipperId(),
+                authenticatedUserProvider.shipperId(),
                 request.productName(),
                 request.thresholdTemp(),
                 hashDeviceKey(deviceKey));
