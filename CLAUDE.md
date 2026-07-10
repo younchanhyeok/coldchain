@@ -78,13 +78,16 @@ com.coldchain
 
 ```bash
 docker compose -f infra/docker-compose.yml up -d   # PG(+PostGIS)·Redis·(M6~)Kafka
-cd backend && ./gradlew bootRun
+cd backend && JWT_SECRET=<32바이트 이상> ADMIN_KEY=<임의 키> ./gradlew bootRun   # M5~: JWT_SECRET 없으면 기동 거부(fail-fast)
 cd backend && ./gradlew test
 cd prediction && uvicorn app.main:app --port 8000
-cd frontend && npm run dev
+cd frontend && npm run dev   # .env: VITE_KAKAO_MAP_KEY, VITE_ADMIN_KEY(백엔드 ADMIN_KEY와 동일값)
 ```
 
 완료 기준(M0): `docker compose up` 한 방에 빈 시스템이 뜬다. 실제 명령이 달라지면 **이 섹션을 즉시 갱신**한다.
+
+- 데모 계정(V8 시드): 화주A `shipper-a@coldchain.local`/`coldchain-a`, 화주B `shipper-b@coldchain.local`/`coldchain-b`.
+- 시뮬레이터는 M5부터 화주 로그인이 필요하다(`--email`/`--password`, 기본값은 화주A) — 리딩 전송은 그대로 디바이스 키.
 
 ## 시뮬레이터 구동 방식 (M1에서 확정, 목표 계약)
 
@@ -98,7 +101,7 @@ python run.py --trackers 50 --interval 5 --profile normal --target http://localh
 - 온도 곡선은 물리 기반(뉴턴 냉각법칙)이어야 함 — 예측(FR-5) 검증의 전제이므로 임의 직선 금지.
 - 부하테스트(M6): `--trackers 500|1000|5000`으로 동일 시뮬레이터 재사용.
 
-## 마일스톤 (현재: M5)
+## 마일스톤 (현재: M6)
 
 | # | 목표 | 완료 기준 |
 |---|---|---|
