@@ -43,6 +43,11 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
     }
 
+    @ExceptionHandler(MagicLinkExpiredException.class)
+    public ProblemDetail handleMagicLinkExpired(MagicLinkExpiredException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "MAGIC_LINK_EXPIRED", ex.getMessage());
+    }
+
     @ExceptionHandler(OutOfOrderConflictException.class)
     public ProblemDetail handleOutOfOrderConflict(OutOfOrderConflictException ex) {
         return problem(HttpStatus.CONFLICT, "READING_OUT_OF_ORDER", ex.getMessage());

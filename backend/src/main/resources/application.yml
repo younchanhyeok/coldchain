@@ -26,6 +26,9 @@ app:
       webhook-url: ${SLACK_WEBHOOK_URL:}
   prediction:
     base-url: ${PREDICTION_BASE_URL:http://localhost:8000}
+  frontend:
+    # 매직링크 URL 조립에 쓰는 프론트 origin.
+    base-url: ${FRONTEND_BASE_URL:http://localhost:5173}
   auth:
     # 미설정 시 어떤 값을 보내도 401 — 로컬/CI 기본값(가짜 통과 없음).
     admin-key: ${ADMIN_KEY:}
