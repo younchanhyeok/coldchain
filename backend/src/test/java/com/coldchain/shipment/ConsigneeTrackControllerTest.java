@@ -98,11 +98,19 @@ class ConsigneeTrackControllerTest {
                 .andExpect(jsonPath("$.shipment.shipperName").value("한국제약"))
                 .andExpect(jsonPath("$.shipment.status").value("READY"))
                 .andExpect(jsonPath("$.thresholdTemp").value(8.0))
+                // 리딩이 아직 없으면 SAFE로 단정하지 않고 UNKNOWN — "데이터 없음"을 "안전함"으로
+                // 오독시키지 않는다(리뷰 반영).
+                .andExpect(jsonPath("$.temperatureStatus").value("UNKNOWN"))
+                .andExpect(jsonPath("$.currentTemperature").doesNotExist())
                 // 노출 범위 최소화 — 화주 내부 표현(트래커ID·경로·이탈구간)은 필드 자체가 없어야 한다.
                 .andExpect(jsonPath("$.trackerId").doesNotExist())
                 .andExpect(jsonPath("$.path").doesNotExist())
                 .andExpect(jsonPath("$.breachSegments").doesNotExist());
     }
+
+    // IN_TRANSIT + 실제 리딩 조합 테스트는 ConsigneeTrackInTransitIntegrationTest로 분리했다 —
+    // 이 클래스의 @Transactional과 리딩 수집의 REQUIRES_NEW가 충돌해(등록한 트래커가 아직
+    // 커밋 전이라 FK가 안 보임) 409로 실패하는 걸 CI에서 확인했다.
 
     @Test
     void getTrack_unknownToken_notFound() throws Exception {
