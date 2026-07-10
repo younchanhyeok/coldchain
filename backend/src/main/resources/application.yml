@@ -29,6 +29,8 @@ app:
   auth:
     # 미설정 시 어떤 값을 보내도 401 — 로컬/CI 기본값(가짜 통과 없음).
     admin-key: ${ADMIN_KEY:}
+    # 미설정·32바이트 미만이면 기동 자체를 거부(JwtTokenProvider fail-fast) — 로컬 실행 시 JWT_SECRET 필수.
+    jwt-secret: ${JWT_SECRET:}
 
 management:
   endpoints:

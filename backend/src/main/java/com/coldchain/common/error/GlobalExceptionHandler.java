@@ -38,6 +38,11 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
     }
 
+    @ExceptionHandler(AuthUnauthorizedException.class)
+    public ProblemDetail handleAuthUnauthorized(AuthUnauthorizedException ex) {
+        return problem(HttpStatus.UNAUTHORIZED, "UNAUTHORIZED", ex.getMessage());
+    }
+
     @ExceptionHandler(OutOfOrderConflictException.class)
     public ProblemDetail handleOutOfOrderConflict(OutOfOrderConflictException ex) {
         return problem(HttpStatus.CONFLICT, "READING_OUT_OF_ORDER", ex.getMessage());
