@@ -1,6 +1,7 @@
 import { useState, type FormEvent } from 'react'
 import { useLocation, useNavigate, type Location } from 'react-router-dom'
 import { login } from '../api/auth'
+import { ApiError } from '../api/client'
 import { setTokens } from '../lib/auth'
 
 export function LoginPage() {
@@ -20,8 +21,14 @@ export function LoginPage() {
       setTokens(tokens)
       const from = (location.state as { from?: Location } | null)?.from
       navigate(from ? `${from.pathname}${from.search}` : '/', { replace: true })
-    } catch {
-      setError('이메일 또는 비밀번호가 올바르지 않습니다.')
+    } catch (err) {
+      // 401(자격 증명 오류)만 비밀번호 탓으로 — 백엔드 다운·500을 같은 메시지로 내면
+      // 데모 중 서버가 안 떠 있는 상황을 비밀번호 오류로 오독하게 된다(리뷰 반영).
+      if (err instanceof ApiError && err.status === 401) {
+        setError('이메일 또는 비밀번호가 올바르지 않습니다.')
+      } else {
+        setError('서버에 연결할 수 없습니다. 잠시 후 다시 시도해 주세요.')
+      }
     } finally {
       setSubmitting(false)
     }

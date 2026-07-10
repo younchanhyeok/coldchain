@@ -86,6 +86,43 @@ class ConsigneeTrackInTransitIntegrationTest {
         return new CreatedShipment(shipmentId, token);
     }
 
+    // 트래커 재사용 시나리오 (a): 배송 완료 후에도 매직링크는 7일 유효한데, 그 창에서 같은
+    // 트래커로 다음 배송이 시작되면 이전 배송의 수령기관에게 다음 배송의 실시간 위치·온도·리딩이
+    // 노출되면 안 된다(M5 전체 검토에서 발견) — 완료된 배송의 뷰는 [생성, 완료] 창의 데이터만
+    // 보여주고, 위치(이미 다음 배송의 것)는 숨긴다.
+    @Test
+    void getTrack_deliveredThenTrackerReused_doesNotLeakNextShipmentData() throws Exception {
+        TrackerRegisterResponse tracker = registerTrackerWithRealDeviceKey("TRK-ML-REUSE");
+        CreatedShipment first = createShipment(tracker.trackerId());
+
+        Instant t1 = Instant.now();
+        sendReading(tracker, t1, 37.4201, 127.1265, 5.0, 1);
+
+        mockMvc.perform(patch("/api/v1/shipments/{id}", first.shipmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"IN_TRANSIT\"}"))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/api/v1/shipments/{id}", first.shipmentId())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("{\"status\":\"DELIVERED\"}"))
+                .andExpect(status().isOk());
+
+        // 같은 트래커로 다음 배송 시작 + 완료 이후 시각의 리딩(다음 배송의 데이터).
+        // +240s: 완료 시각(방금)보다는 뒤, ingest의 미래 스큐 허용(5분)보다는 앞.
+        createShipment(tracker.trackerId());
+        sendReading(tracker, t1.plusSeconds(240), 37.5000, 127.2000, 9.5, 2);
+
+        // 첫 배송의 매직링크: 완료 창 안의 데이터만 — 다음 배송 리딩(9.5, 새 위치)이 안 보여야 한다.
+        mockMvc.perform(get("/api/v1/track/{token}", first.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.shipment.status").value("DELIVERED"))
+                .andExpect(jsonPath("$.temperatureLog", org.hamcrest.Matchers.hasSize(1)))
+                .andExpect(jsonPath("$.temperatureLog[0].temperature").value(5.0))
+                .andExpect(jsonPath("$.currentTemperature").value(5.0))
+                .andExpect(jsonPath("$.temperatureStatus").value("SAFE"))
+                .andExpect(jsonPath("$.position").doesNotExist());
+    }
+
     // 이 PR3 조립 로직의 핵심 분기 — IN_TRANSIT일 때만 TrackService.getTrack()을 재사용해
     // remainingDistanceMeters·eta를 채운다. 로컬 curl로만 확인하고 CI엔 없었던 걸 리뷰에서
     // 지적받아 추가(회귀 방지: TrackService 시그니처가 바뀌면 이 재사용처가 조용히 깨지는 걸 잡음).

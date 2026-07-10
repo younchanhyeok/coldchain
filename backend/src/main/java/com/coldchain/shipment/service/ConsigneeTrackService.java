@@ -71,8 +71,34 @@ public class ConsigneeTrackService {
                 .map(AppUser::getCompanyName)
                 .orElse(null);
 
+        // 이 shipment의 시간 창 — 트래커는 배송 완료 후 재사용되므로(같은 트래커의 다음 배송 허용),
+        // 트래커의 전역 최신 상태(tracker_latest)와 리딩 로그를 이 창으로 제한하지 않으면 매직링크가
+        // 다른 배송의 데이터를 노출한다: (a) 완료 후 7일 유효 창 동안 다음 배송의 실시간 위치·온도,
+        // (b) 재사용 트래커의 새 배송에서 리딩 도착 전 이전 배송의 잔상(UNKNOWN이어야 할 것이
+        // 이전 온도로 SAFE/BREACH 표시).
+        Instant windowStart = shipment.getCreatedAt();
+        Instant windowEnd = shipment.getDeliveredAt(); // null = 아직 진행 중(상한 없음)
+
         TrackerLatest latest = trackerLatestRepository.findById(shipment.getTrackerId()).orElse(null);
-        BigDecimal currentTemperature = latest != null ? latest.getLastTemp() : null;
+        boolean latestInWindow = latest != null && latest.getLastTs() != null
+                && !latest.getLastTs().isBefore(windowStart)
+                && (windowEnd == null || !latest.getLastTs().isAfter(windowEnd));
+
+        List<TemperatureLogPoint> temperatureLog = (windowEnd == null
+                ? readingRepository.findByTrackerIdAndRecordedAtGreaterThanEqualOrderByRecordedAtDesc(
+                        shipment.getTrackerId(), windowStart, PageRequest.of(0, MAX_LOG_POINTS))
+                : readingRepository.findByTrackerIdAndRecordedAtBetweenOrderByRecordedAtDesc(
+                        shipment.getTrackerId(), windowStart, windowEnd, PageRequest.of(0, MAX_LOG_POINTS)))
+                .stream()
+                .sorted(Comparator.comparing(Reading::getRecordedAt))
+                .map(r -> new TemperatureLogPoint(r.getRecordedAt(), r.getTemperature()))
+                .toList();
+
+        // 창 밖의 latest(다음 배송 진행 중 등)면 이 배송 창 안의 마지막 리딩으로 폴백 — 완료된
+        // 배송이 "배송 당시 마지막 온도"를 유지하게 한다(다음 배송 온도로 갱신되지 않도록).
+        BigDecimal currentTemperature = latestInWindow
+                ? latest.getLastTemp()
+                : (temperatureLog.isEmpty() ? null : temperatureLog.get(temperatureLog.size() - 1).temperature());
         // 리딩이 아직 없으면(발급 직후 등) "SAFE"로 단정하지 않는다 — 콜드체인에서 "데이터 없음"을
         // "안전함"으로 오독시키는 건 가장 나쁜 종류의 거짓이다. UNKNOWN으로 정직하게 구분.
         String temperatureStatus;
@@ -83,7 +109,8 @@ public class ConsigneeTrackService {
         } else {
             temperatureStatus = "SAFE";
         }
-        PositionResponse position = latest != null && latest.getLastPosition() != null
+        // 위치는 폴백 없이 창 안의 latest만 — 창 밖이면 실시간 위치가 이미 다음 배송의 것이다.
+        PositionResponse position = latestInWindow && latest.getLastPosition() != null
                 ? new PositionResponse(GeoPoints.lat(latest.getLastPosition()), GeoPoints.lon(latest.getLastPosition()))
                 : null;
 
@@ -98,14 +125,6 @@ public class ConsigneeTrackService {
                 eta = Instant.now().plusSeconds(Math.round(track.etaMinutes() * 60));
             }
         }
-
-        List<TemperatureLogPoint> temperatureLog = readingRepository
-                .findByTrackerIdAndRecordedAtGreaterThanEqualOrderByRecordedAtDesc(
-                        shipment.getTrackerId(), shipment.getCreatedAt(), PageRequest.of(0, MAX_LOG_POINTS))
-                .stream()
-                .sorted(Comparator.comparing(Reading::getRecordedAt))
-                .map(r -> new TemperatureLogPoint(r.getRecordedAt(), r.getTemperature()))
-                .toList();
 
         return new ConsigneeTrackResponse(
                 new ShipmentSummary(shipment.getProductName(), shipperName, shipment.getStatus(), eta),
