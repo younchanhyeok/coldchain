@@ -1,5 +1,6 @@
 package com.coldchain.tracker.controller;
 
+import com.coldchain.auth.TrackerOwnershipGuard;
 import com.coldchain.shipment.domain.ShipmentStatus;
 import com.coldchain.tracker.domain.TrackerStatus;
 import com.coldchain.tracker.dto.TrackerDetailResponse;
@@ -25,10 +26,13 @@ public class TrackerController {
 
     private final TrackerService trackerService;
     private final TrackerQueryService trackerQueryService;
+    private final TrackerOwnershipGuard trackerOwnershipGuard;
 
-    public TrackerController(TrackerService trackerService, TrackerQueryService trackerQueryService) {
+    public TrackerController(TrackerService trackerService, TrackerQueryService trackerQueryService,
+            TrackerOwnershipGuard trackerOwnershipGuard) {
         this.trackerService = trackerService;
         this.trackerQueryService = trackerQueryService;
+        this.trackerOwnershipGuard = trackerOwnershipGuard;
     }
 
     @PostMapping
@@ -48,6 +52,7 @@ public class TrackerController {
 
     @GetMapping("/{trackerId}")
     public TrackerDetailResponse detail(@PathVariable String trackerId) {
+        trackerOwnershipGuard.assertOwnedByCurrentShipper(trackerId);
         return trackerQueryService.detail(trackerId);
     }
 }

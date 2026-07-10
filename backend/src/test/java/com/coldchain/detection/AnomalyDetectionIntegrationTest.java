@@ -5,6 +5,7 @@ import static org.awaitility.Awaitility.await;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
+import com.coldchain.DefaultShipperAuthConfig;
 import com.coldchain.TestcontainersConfiguration;
 import com.coldchain.detection.domain.AnomalyEvent;
 import com.coldchain.detection.domain.AnomalyStatus;
@@ -36,7 +37,7 @@ import org.springframework.test.web.servlet.MockMvc;
  */
 @SpringBootTest
 @AutoConfigureMockMvc
-@Import(TestcontainersConfiguration.class)
+@Import({TestcontainersConfiguration.class, DefaultShipperAuthConfig.class})
 class AnomalyDetectionIntegrationTest {
 
     private static final Duration QUERY_WINDOW = Duration.ofHours(1);

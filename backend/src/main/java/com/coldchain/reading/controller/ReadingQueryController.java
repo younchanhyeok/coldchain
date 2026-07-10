@@ -1,5 +1,6 @@
 package com.coldchain.reading.controller;
 
+import com.coldchain.auth.TrackerOwnershipGuard;
 import com.coldchain.reading.dto.ReadingSeriesResponse;
 import com.coldchain.reading.service.ReadingService;
 import java.time.Duration;
@@ -19,9 +20,11 @@ public class ReadingQueryController {
     private static final int MAX_LIMIT = 5000;
 
     private final ReadingService readingService;
+    private final TrackerOwnershipGuard trackerOwnershipGuard;
 
-    public ReadingQueryController(ReadingService readingService) {
+    public ReadingQueryController(ReadingService readingService, TrackerOwnershipGuard trackerOwnershipGuard) {
         this.readingService = readingService;
+        this.trackerOwnershipGuard = trackerOwnershipGuard;
     }
 
     @GetMapping
@@ -30,6 +33,7 @@ public class ReadingQueryController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) Integer limit) {
+        trackerOwnershipGuard.assertOwnedByCurrentShipper(trackerId);
         Instant effectiveTo = to != null ? to : Instant.now();
         Instant effectiveFrom = from != null ? from : effectiveTo.minus(DEFAULT_RANGE);
         int effectiveLimit = limit != null ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;

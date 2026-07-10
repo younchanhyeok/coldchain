@@ -1,6 +1,6 @@
 package com.coldchain.shipment.service;
 
-import com.coldchain.common.DevShipperProvider;
+import com.coldchain.auth.AuthenticatedUserProvider;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.dto.ShipmentListResponse;
@@ -24,22 +24,22 @@ public class ShipmentQueryService {
     private final ShipmentRepository shipmentRepository;
     private final TrackerRepository trackerRepository;
     private final TrackerLatestRepository trackerLatestRepository;
-    private final DevShipperProvider devShipperProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
     private final TrackerQueryService trackerQueryService;
 
     public ShipmentQueryService(ShipmentRepository shipmentRepository, TrackerRepository trackerRepository,
-            TrackerLatestRepository trackerLatestRepository, DevShipperProvider devShipperProvider,
+            TrackerLatestRepository trackerLatestRepository, AuthenticatedUserProvider authenticatedUserProvider,
             TrackerQueryService trackerQueryService) {
         this.shipmentRepository = shipmentRepository;
         this.trackerRepository = trackerRepository;
         this.trackerLatestRepository = trackerLatestRepository;
-        this.devShipperProvider = devShipperProvider;
+        this.authenticatedUserProvider = authenticatedUserProvider;
         this.trackerQueryService = trackerQueryService;
     }
 
     public ShipmentListResponse list(int page, int size) {
         Page<Shipment> result = shipmentRepository.findByShipperIdOrderByCreatedAtDesc(
-                devShipperProvider.shipperId(), PageRequest.of(page, size));
+                authenticatedUserProvider.shipperId(), PageRequest.of(page, size));
 
         // PERF(M6): N+1 — shipment마다 tracker/latest를 findById로 건당 조회한다(findAllById로
         // 배치 가능). 지금은 정합성엔 문제없는 순수 성능 이슈라 M6 부하테스트에서 실측 후 고친다.

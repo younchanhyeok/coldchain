@@ -16,6 +16,9 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
 
     Optional<Shipment> findByTrackerIdAndStatusNot(String trackerId, ShipmentStatus status);
 
+    // PATCH /shipments/{id} 소유권 검사 — 타사 shipment면 부재와 동일하게 취급(404, 존재 은닉).
+    Optional<Shipment> findByIdAndShipperId(Long id, Long shipperId);
+
     // 화물 관리 탭 목록 — 상태 무관 전체(검색/상태 필터는 프론트 클라이언트 사이드, 화면_탭_구성.md)
     Page<Shipment> findByShipperIdOrderByCreatedAtDesc(Long shipperId, Pageable pageable);
 

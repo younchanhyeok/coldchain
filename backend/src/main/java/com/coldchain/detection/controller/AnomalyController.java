@@ -1,5 +1,6 @@
 package com.coldchain.detection.controller;
 
+import com.coldchain.auth.TrackerOwnershipGuard;
 import com.coldchain.detection.domain.AnomalyType;
 import com.coldchain.detection.dto.AnomaliesResponse;
 import com.coldchain.detection.dto.AnomalyResponse;
@@ -17,9 +18,12 @@ public class AnomalyController {
     private static final Duration DEFAULT_RANGE = Duration.ofHours(6);
 
     private final AnomalyEventRepository anomalyEventRepository;
+    private final TrackerOwnershipGuard trackerOwnershipGuard;
 
-    public AnomalyController(AnomalyEventRepository anomalyEventRepository) {
+    public AnomalyController(AnomalyEventRepository anomalyEventRepository,
+            TrackerOwnershipGuard trackerOwnershipGuard) {
         this.anomalyEventRepository = anomalyEventRepository;
+        this.trackerOwnershipGuard = trackerOwnershipGuard;
     }
 
     @GetMapping("/api/v1/trackers/{trackerId}/anomalies")
@@ -28,6 +32,7 @@ public class AnomalyController {
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
             @RequestParam(required = false) AnomalyType type) {
+        trackerOwnershipGuard.assertOwnedByCurrentShipper(trackerId);
         Instant effectiveTo = to != null ? to : Instant.now();
         Instant effectiveFrom = from != null ? from : effectiveTo.minus(DEFAULT_RANGE);
 

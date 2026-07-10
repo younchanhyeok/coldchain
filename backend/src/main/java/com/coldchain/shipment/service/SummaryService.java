@@ -1,6 +1,6 @@
 package com.coldchain.shipment.service;
 
-import com.coldchain.common.DevShipperProvider;
+import com.coldchain.auth.AuthenticatedUserProvider;
 import com.coldchain.prediction.domain.PredictionStatus;
 import com.coldchain.prediction.repository.PredictionRepository;
 import com.coldchain.shipment.domain.Shipment;
@@ -22,21 +22,21 @@ public class SummaryService {
     private final ShipmentRepository shipmentRepository;
     private final TrackerRepository trackerRepository;
     private final TrackerLatestRepository trackerLatestRepository;
-    private final DevShipperProvider devShipperProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
     private final PredictionRepository predictionRepository;
 
     public SummaryService(ShipmentRepository shipmentRepository, TrackerRepository trackerRepository,
-            TrackerLatestRepository trackerLatestRepository, DevShipperProvider devShipperProvider,
+            TrackerLatestRepository trackerLatestRepository, AuthenticatedUserProvider authenticatedUserProvider,
             PredictionRepository predictionRepository) {
         this.shipmentRepository = shipmentRepository;
         this.trackerRepository = trackerRepository;
         this.trackerLatestRepository = trackerLatestRepository;
-        this.devShipperProvider = devShipperProvider;
+        this.authenticatedUserProvider = authenticatedUserProvider;
         this.predictionRepository = predictionRepository;
     }
 
     public SummaryResponse getSummary() {
-        List<Shipment> shipments = shipmentRepository.findByShipperId(devShipperProvider.shipperId());
+        List<Shipment> shipments = shipmentRepository.findByShipperId(authenticatedUserProvider.shipperId());
 
         int totalShipments = shipments.size();
         int inTransit = 0;

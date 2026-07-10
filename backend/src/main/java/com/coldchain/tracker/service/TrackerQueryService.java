@@ -1,6 +1,6 @@
 package com.coldchain.tracker.service;
 
-import com.coldchain.common.DevShipperProvider;
+import com.coldchain.auth.AuthenticatedUserProvider;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.ResourceNotFoundException;
 import com.coldchain.detection.service.AnomalyQueryService;
@@ -30,24 +30,24 @@ public class TrackerQueryService {
     private final TrackerRepository trackerRepository;
     private final TrackerLatestRepository trackerLatestRepository;
     private final ShipmentRepository shipmentRepository;
-    private final DevShipperProvider devShipperProvider;
+    private final AuthenticatedUserProvider authenticatedUserProvider;
     private final AnomalyQueryService anomalyQueryService;
     private final PredictionQueryService predictionQueryService;
 
     public TrackerQueryService(TrackerRepository trackerRepository, TrackerLatestRepository trackerLatestRepository,
-            ShipmentRepository shipmentRepository, DevShipperProvider devShipperProvider,
+            ShipmentRepository shipmentRepository, AuthenticatedUserProvider authenticatedUserProvider,
             AnomalyQueryService anomalyQueryService, PredictionQueryService predictionQueryService) {
         this.trackerRepository = trackerRepository;
         this.trackerLatestRepository = trackerLatestRepository;
         this.shipmentRepository = shipmentRepository;
-        this.devShipperProvider = devShipperProvider;
+        this.authenticatedUserProvider = authenticatedUserProvider;
         this.predictionQueryService = predictionQueryService;
         this.anomalyQueryService = anomalyQueryService;
     }
 
     public TrackerListResponse list(TrackerStatus statusFilter, ShipmentStatus shipmentStatus, int page, int size) {
         List<Shipment> shipments = shipmentRepository.findByShipperIdAndStatus(
-                devShipperProvider.shipperId(), shipmentStatus);
+                authenticatedUserProvider.shipperId(), shipmentStatus);
 
         // PERF(M6): N+1 — shipment마다 tracker/latest를 findById로 건당 조회한다(findAllById로
         // 배치 가능). 필터·정렬·페이지네이션도 전건을 메모리에 올린 뒤 자바에서 수행 중이라

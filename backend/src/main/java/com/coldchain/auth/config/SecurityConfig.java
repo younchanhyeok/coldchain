@@ -3,6 +3,7 @@ package com.coldchain.auth.config;
 import java.util.List;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
+import org.springframework.http.HttpMethod;
 import org.springframework.security.config.Customizer;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
@@ -10,6 +11,7 @@ import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
+import org.springframework.security.web.authentication.UsernamePasswordAuthenticationFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -19,17 +21,17 @@ import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
  * 매직링크(URL path 토큰=capability, principal 개념 없음)·디바이스 키(tracker 행 조회와 결합)·
  * 어드민 키(엔드포인트 1~2개)는 각 컨트롤러 검사를 유지한다(과한 승격 금지).
  *
- * PR1(m5-auth-login) 시점엔 전 경로 permitAll — 로그인 API만 추가하고 기존 동작을 바꾸지
- * 않는다. 화주 경로의 authenticated 전환은 PR2(m5-shipper-scoping)에서 JwtAuthenticationFilter와
- * 함께 켠다.
+ * PR1(m5-auth-login)에선 전 경로 permitAll이었다 — 로그인 API만 추가하고 기존 동작을
+ * 바꾸지 않기 위함. PR2(m5-shipper-scoping)에서 JwtAuthenticationFilter를 필터 체인에 걸고
+ * 화주 경로를 authenticated로 전환한다.
  */
 @Configuration
 @EnableWebSecurity
 public class SecurityConfig {
 
     @Bean
-    public SecurityFilterChain filterChain(HttpSecurity http, ProblemDetailAuthEntryPoint entryPoint)
-            throws Exception {
+    public SecurityFilterChain filterChain(HttpSecurity http, ProblemDetailAuthEntryPoint entryPoint,
+            JwtAuthenticationFilter jwtAuthenticationFilter) throws Exception {
         http
                 // 전 구간 무상태 Bearer — 세션 쿠키가 없으므로 CSRF 공격 표면 자체가 없다.
                 .csrf(csrf -> csrf.disable())
@@ -39,7 +41,19 @@ public class SecurityConfig {
                 .logout(logout -> logout.disable())
                 .cors(Customizer.withDefaults())
                 .exceptionHandling(handling -> handling.authenticationEntryPoint(entryPoint))
-                .authorizeHttpRequests(auth -> auth.anyRequest().permitAll());
+                .authorizeHttpRequests(auth -> auth
+                        .requestMatchers(HttpMethod.OPTIONS, "/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/auth/**").permitAll()
+                        // 매직링크 — 토큰 자체가 리소스 식별자(capability), principal 개념 없음(PR3).
+                        .requestMatchers(HttpMethod.GET, "/api/v1/track/*").permitAll()
+                        // 디바이스 키(X-Device-Key)로 컨트롤러가 검사 — 같은 경로의 GET(조회, 화주
+                        // 스코핑 대상)과 겹치므로 메서드로 구분해야 한다.
+                        .requestMatchers(HttpMethod.POST, "/api/v1/trackers/*/readings").permitAll()
+                        // 어드민 키(X-Admin-Key)로 컨트롤러가 검사 — 엔드포인트 1~2개라 필터 승격은 과함.
+                        .requestMatchers(HttpMethod.GET, "/api/v1/admin/**").permitAll()
+                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        .anyRequest().authenticated())
+                .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
     }
 

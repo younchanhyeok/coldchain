@@ -96,10 +96,12 @@ def main():
     parser.add_argument("--threshold", type=float, default=8.0, help="임계 온도(℃)")
     parser.add_argument("--origin-name", default="성남 물류센터", help="출발지 표시명")
     parser.add_argument("--destination-name", default="서울대병원 약제부", help="도착지 표시명")
+    parser.add_argument("--email", default="shipper-a@coldchain.local", help="화주 로그인 이메일(V8 시드 기본값)")
+    parser.add_argument("--password", default="coldchain-a", help="화주 로그인 비밀번호(V8 시드 기본값)")
     args = parser.parse_args()
 
     waypoints = load_route(args.route)
-    client = TrackerClient(args.target)
+    client = TrackerClient(args.target, args.email, args.password)
 
     trackers = register_trackers(
         client, args.trackers, args.profile, args.threshold, waypoints, args.origin_name, args.destination_name)
