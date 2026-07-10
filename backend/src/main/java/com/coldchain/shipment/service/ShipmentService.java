@@ -1,6 +1,7 @@
 package com.coldchain.shipment.service;
 
 import com.coldchain.auth.AuthenticatedUserProvider;
+import com.coldchain.auth.service.MagicLinkService;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.DuplicateResourceException;
 import com.coldchain.common.error.ResourceNotFoundException;
@@ -20,12 +21,14 @@ public class ShipmentService {
     private final ShipmentRepository shipmentRepository;
     private final TrackerRepository trackerRepository;
     private final AuthenticatedUserProvider authenticatedUserProvider;
+    private final MagicLinkService magicLinkService;
 
     public ShipmentService(ShipmentRepository shipmentRepository, TrackerRepository trackerRepository,
-            AuthenticatedUserProvider authenticatedUserProvider) {
+            AuthenticatedUserProvider authenticatedUserProvider, MagicLinkService magicLinkService) {
         this.shipmentRepository = shipmentRepository;
         this.trackerRepository = trackerRepository;
         this.authenticatedUserProvider = authenticatedUserProvider;
+        this.magicLinkService = magicLinkService;
     }
 
     @Transactional
@@ -50,7 +53,8 @@ public class ShipmentService {
                 request.driverContact());
 
         shipmentRepository.save(shipment);
-        return new ShipmentResponse(shipment.getId(), shipment.getStatus());
+        String magicLink = magicLinkService.issueForShipment(shipment.getId());
+        return new ShipmentResponse(shipment.getId(), shipment.getStatus(), magicLink);
     }
 
     @Transactional
@@ -64,6 +68,10 @@ public class ShipmentService {
             throw new SemanticInvalidException(e.getMessage());
         }
 
-        return new ShipmentResponse(shipment.getId(), shipment.getStatus());
+        if (nextStatus == ShipmentStatus.DELIVERED) {
+            magicLinkService.expireForShipment(shipment.getId(), shipment.getDeliveredAt());
+        }
+
+        return new ShipmentResponse(shipment.getId(), shipment.getStatus(), null);
     }
 }
