@@ -178,14 +178,29 @@ class AuthorizationIntegrationTest {
 
     // --- 8. GET /summary·/alerts가 화주별로만 집계 ---
 
+    // "A로 조회해 1건 이상"만 확인하면 스코핑이 아예 없어도(전체 집계여도) 통과한다 — 실제로
+    // 증명하려면 B가 shipment를 추가해도 A의 totalShipments가 그대로임을 봐야 한다.
     @Test
     void summary_countsOnlyCallingShippersShipments() throws Exception {
         String trackerA = givenTracker("TRK-AUTHZ-SUM-A", SHIPPER_A);
         createShipmentAs(tokenA, trackerA);
+        int totalBeforeBsShipment = readTotalShipments(tokenA);
 
-        mockMvc.perform(get("/api/v1/summary").header("Authorization", tokenA))
+        String trackerB = givenTracker("TRK-AUTHZ-SUM-B", SHIPPER_B);
+        createShipmentAs(tokenB, trackerB);
+
+        int totalAfterBsShipment = readTotalShipments(tokenA);
+        org.assertj.core.api.Assertions.assertThat(totalAfterBsShipment).isEqualTo(totalBeforeBsShipment);
+
+        int totalForB = readTotalShipments(tokenB);
+        org.assertj.core.api.Assertions.assertThat(totalForB).isEqualTo(1);
+    }
+
+    private int readTotalShipments(String token) throws Exception {
+        String body = mockMvc.perform(get("/api/v1/summary").header("Authorization", token))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.totalShipments").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+                .andReturn().getResponse().getContentAsString();
+        return objectMapper.readTree(body).get("totalShipments").asInt();
     }
 
     @Test
