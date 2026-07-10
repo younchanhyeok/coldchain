@@ -11,7 +11,10 @@ import com.coldchain.DefaultShipperAuthConfig;
 import com.coldchain.TestcontainersConfiguration;
 import com.coldchain.auth.domain.MagicLinkToken;
 import com.coldchain.auth.repository.MagicLinkTokenRepository;
+import com.coldchain.common.GeoPoints;
 import com.coldchain.tracker.domain.Tracker;
+import com.coldchain.tracker.domain.TrackerLatest;
+import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.math.BigDecimal;
@@ -40,6 +43,9 @@ class ConsigneeTrackControllerTest {
 
     @Autowired
     private MagicLinkTokenRepository magicLinkTokenRepository;
+
+    @Autowired
+    private TrackerLatestRepository trackerLatestRepository;
 
     @Autowired
     private ObjectMapper objectMapper;
@@ -111,6 +117,27 @@ class ConsigneeTrackControllerTest {
     // IN_TRANSIT + 실제 리딩 조합 테스트는 ConsigneeTrackInTransitIntegrationTest로 분리했다 —
     // 이 클래스의 @Transactional과 리딩 수집의 REQUIRES_NEW가 충돌해(등록한 트래커가 아직
     // 커밋 전이라 FK가 안 보임) 409로 실패하는 걸 CI에서 확인했다.
+
+    // 트래커 재사용 시나리오 (b): 이전 배송의 잔상이 남은 tracker_latest(이 배송 생성 이전
+    // lastTs)는 무시돼야 한다 — 안 그러면 리딩이 아직 없는 새 배송이 이전 배송의 온도·위치로
+    // SAFE/BREACH를 표시한다(M5 전체 검토에서 발견). 리딩 수집 API 없이 리포지토리로 직접
+    // 심으므로 REQUIRES_NEW 충돌이 없다.
+    @Test
+    void getTrack_staleLatestFromPreviousShipment_ignoredAsUnknown() throws Exception {
+        String trackerId = givenTracker("TRK-ML-STALE");
+        TrackerLatest stale = new TrackerLatest(trackerId);
+        stale.applyReading(Instant.now().minusSeconds(3600), new BigDecimal("9.9"), GeoPoints.of(37.5, 127.0));
+        trackerLatestRepository.save(stale);
+
+        CreatedShipment created = createShipment(trackerId);
+
+        mockMvc.perform(get("/api/v1/track/{token}", created.token()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.temperatureStatus").value("UNKNOWN"))
+                .andExpect(jsonPath("$.currentTemperature").doesNotExist())
+                .andExpect(jsonPath("$.position").doesNotExist())
+                .andExpect(jsonPath("$.temperatureLog", org.hamcrest.Matchers.hasSize(0)));
+    }
 
     @Test
     void getTrack_unknownToken_notFound() throws Exception {
