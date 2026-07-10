@@ -12,6 +12,10 @@ import { usePolling } from '../hooks/usePolling'
  * 리포트 탭을 이 화면으로 대체하거나 흡수하지 않는다("모델 지표 이동" 제안 기각 — M4에서
  * 확정한 화주 화면을 해체할 이유가 없다). 여기 지표는 화주별 스코프 분리 없이 시스템 전체
  * 집계다(v2로 이연 — README에 명시 예정).
+ *
+ * 로컬 전용 도구다 — 어드민 키가 프론트 번들에 그대로 새겨지므로(adminMetrics.ts 주석 참고)
+ * 이 화면을 포함한 프론트를 공개 배포해선 안 된다. 인증 없는 공개 배포가 필요해지면 서버사이드
+ * 프록시나 별도 어드민 로그인이 있어야 하는데, 그게 "어드민 화면 v2" 이연의 실제 근거다.
  */
 export function AdminPage() {
   const { data: overview } = usePolling(() => (hasAdminKey ? getAdminOverview() : Promise.resolve(null)), 30_000)
