@@ -73,9 +73,16 @@ public class ConsigneeTrackService {
 
         TrackerLatest latest = trackerLatestRepository.findById(shipment.getTrackerId()).orElse(null);
         BigDecimal currentTemperature = latest != null ? latest.getLastTemp() : null;
-        String temperatureStatus = currentTemperature != null && currentTemperature.compareTo(tracker.getThresholdTemp()) > 0
-                ? "BREACH"
-                : "SAFE";
+        // 리딩이 아직 없으면(발급 직후 등) "SAFE"로 단정하지 않는다 — 콜드체인에서 "데이터 없음"을
+        // "안전함"으로 오독시키는 건 가장 나쁜 종류의 거짓이다. UNKNOWN으로 정직하게 구분.
+        String temperatureStatus;
+        if (currentTemperature == null) {
+            temperatureStatus = "UNKNOWN";
+        } else if (currentTemperature.compareTo(tracker.getThresholdTemp()) > 0) {
+            temperatureStatus = "BREACH";
+        } else {
+            temperatureStatus = "SAFE";
+        }
         PositionResponse position = latest != null && latest.getLastPosition() != null
                 ? new PositionResponse(GeoPoints.lat(latest.getLastPosition()), GeoPoints.lon(latest.getLastPosition()))
                 : null;
