@@ -11,6 +11,8 @@ import com.coldchain.auth.domain.AppUserRole;
 import com.coldchain.auth.service.JwtTokenProvider;
 import com.coldchain.tracker.domain.Tracker;
 import com.coldchain.tracker.repository.TrackerRepository;
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -45,6 +47,9 @@ class AuthorizationIntegrationTest {
 
     @Autowired
     private TrackerRepository trackerRepository;
+
+    @Autowired
+    private ObjectMapper objectMapper;
 
     private String tokenA;
     private String tokenB;
@@ -129,20 +134,31 @@ class AuthorizationIntegrationTest {
     }
 
     // 진짜 없는 트래커의 404와 "있지만 타사 소유"인 404가 바디상 구분되지 않아야 한다(존재 은닉).
+    // 같은 trackerId 문자열로 먼저 "부재" 응답을 받고, 그 다음 화주B 소유로 등록해 같은 id로
+    // "타사 소유" 응답을 받는다 — id가 다르면 detail/instance가 달라 애초에 비교가 안 된다.
     @Test
     void notFoundBody_isIdenticalForMissingTrackerAndForeignTracker() throws Exception {
-        givenTracker("TRK-AUTHZ-B6", SHIPPER_B);
+        String trackerId = "TRK-AUTHZ-SAME-ID";
+
+        String missingBody = mockMvc.perform(
+                        get("/api/v1/trackers/{id}/prediction", trackerId).header("Authorization", tokenA))
+                .andExpect(status().isNotFound())
+                .andReturn().getResponse().getContentAsString();
+
+        givenTracker(trackerId, SHIPPER_B);
 
         String foreignBody = mockMvc.perform(
-                        get("/api/v1/trackers/{id}/prediction", "TRK-AUTHZ-B6").header("Authorization", tokenA))
-                .andExpect(status().isNotFound())
-                .andReturn().getResponse().getContentAsString();
-        String missingBody = mockMvc.perform(
-                        get("/api/v1/trackers/{id}/prediction", "TRK-NO-SUCH-TRACKER").header("Authorization", tokenA))
+                        get("/api/v1/trackers/{id}/prediction", trackerId).header("Authorization", tokenA))
                 .andExpect(status().isNotFound())
                 .andReturn().getResponse().getContentAsString();
 
-        org.assertj.core.api.Assertions.assertThat(foreignBody).isEqualTo(missingBody);
+        // timestamp만 다르고 나머지(type/title/status/detail/code/instance)는 완전히 같아야 한다.
+        ObjectNode missing = (ObjectNode) objectMapper.readTree(missingBody);
+        ObjectNode foreign = (ObjectNode) objectMapper.readTree(foreignBody);
+        missing.remove("timestamp");
+        foreign.remove("timestamp");
+
+        org.assertj.core.api.Assertions.assertThat(foreign).isEqualTo(missing);
     }
 
     // --- 7. 화주A가 B의 shipment PATCH → 404 ---
