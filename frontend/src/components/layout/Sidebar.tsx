@@ -1,3 +1,6 @@
+import { useNavigate } from 'react-router-dom'
+import { clearTokens, getCompanyName } from '../../lib/auth'
+
 export type Tab = 'dashboard' | 'cargo' | 'alerts' | 'liveops' | 'risk' | 'report'
 
 // 화면_탭_구성.md 확정 순서: 대시보드 → 화물 관리 → 알림 → 리포트 → 배송 현황 → 위험 모니터링.
@@ -18,6 +21,13 @@ interface SidebarProps {
 }
 
 export function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
+  const navigate = useNavigate()
+
+  function handleLogout() {
+    clearTokens()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <aside className="flex w-[260px] shrink-0 flex-col border-r border-border bg-sidebar">
       <div className="px-4 py-5 text-lg font-semibold tracking-tight text-neutral-100">
@@ -40,7 +50,12 @@ export function Sidebar({ activeTab, onSelectTab }: SidebarProps) {
           ))}
         </ul>
       </nav>
-      <div className="border-t border-border px-4 py-3 text-xs text-neutral-500">개발용 화주</div>
+      <div className="flex items-center justify-between border-t border-border px-4 py-3 text-xs text-neutral-500">
+        <span>{getCompanyName() ?? '화주'}</span>
+        <button type="button" onClick={handleLogout} className="text-neutral-500 hover:text-neutral-300">
+          로그아웃
+        </button>
+      </div>
     </aside>
   )
 }
