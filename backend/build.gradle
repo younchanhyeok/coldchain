@@ -19,6 +19,9 @@ repositories {
 
 dependencies {
 	implementation 'org.springframework.boot:spring-boot-starter-actuator'
+	// M6 부하테스트 계측 — /actuator/prometheus 스냅샷 diff로 서버측 지표(HTTP 지연 percentile,
+	// Hikari, JVM 스레드)를 본다. Prometheus/Grafana 서버는 도입하지 않는다(스냅샷으로 충분).
+	implementation 'io.micrometer:micrometer-registry-prometheus'
 	implementation 'org.springframework.boot:spring-boot-starter-data-jpa'
 	implementation 'org.springframework.boot:spring-boot-starter-data-redis'
 	implementation 'org.springframework.boot:spring-boot-starter-security'

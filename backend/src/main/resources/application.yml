@@ -39,4 +39,10 @@ management:
   endpoints:
     web:
       exposure:
-        include: health
+        include: health,metrics,prometheus
+  metrics:
+    distribution:
+      # 서버측 p50/p95/p99 — micrometer 기본 decay 윈도우(직전 ~2분) 기준이라 부하 종료 직후
+      # 스냅샷이 정상상태(steady state)를 반영한다. 부하테스트 절차는 simulator/loadtest.sh.
+      percentiles:
+        "[http.server.requests]": 0.5, 0.95, 0.99
