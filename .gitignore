@@ -38,3 +38,6 @@ Thumbs.db
 
 # 개인 학습/정리 노트 (리포에 올리지 않음)
 docs/개발정리_*.md
+
+# 부하테스트 산출물 (M6) — 정리된 수치는 README/개발정리에 옮긴다
+simulator/reports/

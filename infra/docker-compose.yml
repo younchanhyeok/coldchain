@@ -1,6 +1,9 @@
 services:
   postgres:
     image: postgis/postgis:16-3.4
+    # pg_stat_statements — M6 부하테스트 병목 분석용(top query 캡처). preload만 여기서 걸고
+    # CREATE EXTENSION은 loadtest.sh가 실행마다 보장한다(fresh 볼륨에서 사라지므로).
+    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
     environment:
       POSTGRES_DB: ${DB_NAME:-coldchain}
       POSTGRES_USER: ${DB_USER:-coldchain}

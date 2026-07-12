@@ -99,7 +99,7 @@ python run.py --trackers 50 --interval 5 --profile normal --target http://localh
 ```
 
 - 온도 곡선은 물리 기반(뉴턴 냉각법칙)이어야 함 — 예측(FR-5) 검증의 전제이므로 임의 직선 금지.
-- 부하테스트(M6): `--trackers 500|1000|5000`으로 동일 시뮬레이터 재사용.
+- 부하테스트(M6): `./loadtest.sh <trackers> [measure_s=300] [warmup_s=60]` — 동일 시뮬레이터를 asyncio 부하 발생기로 재사용(500|1000|5000). 워밍업 후 측정, SSE e2e·대시보드 조회 프로브 병행, 산출물은 `simulator/reports/`(gitignore). 비교 런은 fresh 볼륨(`down -v`)에서.
 
 ## 마일스톤 (현재: M6)
 

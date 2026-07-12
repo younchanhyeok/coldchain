@@ -51,7 +51,10 @@ public class SecurityConfig {
                         .requestMatchers(HttpMethod.POST, "/api/v1/trackers/*/readings").permitAll()
                         // 어드민 키(X-Admin-Key)로 컨트롤러가 검사 — 엔드포인트 1~2개라 필터 승격은 과함.
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/**").permitAll()
-                        .requestMatchers(HttpMethod.GET, "/actuator/health").permitAll()
+                        // metrics·prometheus는 M6 부하테스트 계측용 — 로컬 docker-compose 전용
+                        // 배포(D3)라 외부 노출면이 없다. 공개 배포로 바뀌면 어드민 키 검사 승격 필요.
+                        .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/metrics/**",
+                                "/actuator/prometheus").permitAll()
                         .anyRequest().authenticated())
                 .addFilterBefore(jwtAuthenticationFilter, UsernamePasswordAuthenticationFilter.class);
         return http.build();
