@@ -22,7 +22,9 @@ public class PredictionListener {
         this.predictionService = predictionService;
     }
 
-    @Async
+    // 전용 풀(predictionExecutor) — analyze는 Python HTTP 호출을 포함하는 외부 I/O 작업이라
+    // Python 브라운아웃 시 기본 풀(탐지·알림)을 잠식하지 않도록 격리한다(M6 실측, AsyncConfig 참조).
+    @Async("predictionExecutor")
     @EventListener
     public void onReadingRecorded(ReadingRecordedEvent event) {
         predictionService.analyze(event);
@@ -31,6 +33,8 @@ public class PredictionListener {
     /**
      * 급변(SUDDEN) 활성화 시에만 예측을 무효화한다 — GRADUAL은 오히려 예측이 다루는 바로 그
      * 추세이므로 무효화 대상이 아니다("안전한 실패 설계"는 선형 가정이 깨지는 이산 이벤트에만 적용).
+     * 의도적으로 기본 풀 — 무효화는 Python 없는 순수 DB 작업이고, 예측 풀이 브라운아웃으로
+     * 막혀 있을 때도 "급변 시 예측 무효화"라는 안전장치는 동작해야 한다.
      */
     @Async
     @EventListener
