@@ -63,6 +63,17 @@ public class GlobalExceptionHandler {
         return detail;
     }
 
+    /** 수동 검증(수집 API 단건/배치 분기) — @Valid 실패와 같은 400/VALIDATION_FAILED 계약 유지. */
+    @ExceptionHandler(RequestFieldValidationException.class)
+    public ProblemDetail handleRequestFieldValidation(RequestFieldValidationException ex) {
+        ProblemDetail detail = problem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", ex.getMessage());
+        List<Map<String, String>> errors = ex.getViolations().stream()
+                .map(v -> Map.of("field", v.field(), "reason", v.reason()))
+                .toList();
+        detail.setProperty("errors", errors);
+        return detail;
+    }
+
     private ProblemDetail problem(HttpStatus status, String code, String detail) {
         ProblemDetail problemDetail = ProblemDetail.forStatusAndDetail(status, detail);
         problemDetail.setType(URI.create("https://coldchain.dev/errors/" + code.toLowerCase().replace('_', '-')));

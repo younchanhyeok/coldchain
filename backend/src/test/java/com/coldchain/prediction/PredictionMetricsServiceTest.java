@@ -2,7 +2,6 @@ package com.coldchain.prediction;
 
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.Mockito.when;
 
 import com.coldchain.prediction.domain.BreachEvent;
@@ -17,7 +16,6 @@ import java.math.BigDecimal;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.List;
-import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.Mock;
@@ -84,7 +82,6 @@ class PredictionMetricsServiceTest {
         when(predictionRepository.findByCreatedAtBetween(from, to)).thenReturn(episodes);
         when(predictionRepository.findByStatusAndBreachedAtBetween(any(), any(), any())).thenReturn(List.of());
         when(breachEventRepository.findByTsBetweenOrderByTsAsc(from, to)).thenReturn(List.of());
-        when(trackerRepository.findById(anyString())).thenReturn(Optional.empty());
 
         PredictionMetricsResponse response = newService().getMetrics(from, to, null);
 
@@ -108,7 +105,6 @@ class PredictionMetricsServiceTest {
         when(predictionRepository.findByCreatedAtBetween(from, to)).thenReturn(episodes);
         when(predictionRepository.findByStatusAndBreachedAtBetween(any(), any(), any())).thenReturn(List.of());
         when(breachEventRepository.findByTsBetweenOrderByTsAsc(from, to)).thenReturn(List.of());
-        when(trackerRepository.findById(anyString())).thenReturn(Optional.empty());
 
         PredictionMetricsResponse response = newService().getMetrics(from, to, null);
 
@@ -130,7 +126,6 @@ class PredictionMetricsServiceTest {
                 .thenReturn(List.of(predictedEpisode));
         when(breachEventRepository.findByTsBetweenOrderByTsAsc(from, to))
                 .thenReturn(List.of(predictedBreach, missedBreach));
-        when(trackerRepository.findById(anyString())).thenReturn(Optional.empty());
 
         PredictionMetricsResponse response = newService().getMetrics(from, to, null);
 
@@ -169,7 +164,6 @@ class PredictionMetricsServiceTest {
         when(predictionRepository.findByCreatedAtBetween(from, to)).thenReturn(List.of(v1Episode, v2Episode));
         when(predictionRepository.findByStatusAndBreachedAtBetween(any(), any(), any())).thenReturn(List.of());
         when(breachEventRepository.findByTsBetweenOrderByTsAsc(from, to)).thenReturn(List.of());
-        when(trackerRepository.findById(anyString())).thenReturn(Optional.empty());
 
         PredictionMetricsResponse response = newService().getMetrics(from, to, "v1-linear");
 

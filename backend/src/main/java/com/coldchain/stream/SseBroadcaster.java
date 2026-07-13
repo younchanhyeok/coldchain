@@ -40,6 +40,18 @@ public class SseBroadcaster {
     private final TrackerOwnerCache trackerOwnerCache;
     private final Map<Long, List<SseEmitter>> emittersByShipper = new ConcurrentHashMap<>();
 
+    /**
+     * reading 이벤트 conflation 버퍼(M6) — 트래커당 최신값만 남기고 1초 주기로 flush한다.
+     * baseline 부하테스트(5000 트래커=수집 1000/s)에서 이벤트당 즉시 send가 커넥션당
+     * ~150건/s에서 캡을 치며 백로그가 무한 누적, e2e 반영이 290초까지 밀렸다. 온도·위치는
+     * "최신값이 이전값을 대체"하는 데이터라 중간값을 버려도 정보 손실이 없고, 버퍼 크기가
+     * 트래커 수로 유계라 백로그가 원리적으로 못 자란다. breach/anomaly 같은 상태 전이
+     * 이벤트는 대체 불가(전이 자체가 정보)이므로 conflation 없이 즉시 보낸다.
+     * 참고: 구독 커넥션 하나가 수천 트래커를 전부 받는 형상에선 flush 한 바퀴가 send 비용
+     * × 트래커 수만큼 걸린다 — 커넥션당 송신량의 물리 한계는 남는다(부하테스트 리포트에 기록).
+     */
+    private final Map<String, ReadingStreamEvent> pendingReadings = new ConcurrentHashMap<>();
+
     public SseBroadcaster(TrackerOwnerCache trackerOwnerCache) {
         this.trackerOwnerCache = trackerOwnerCache;
     }
@@ -53,6 +65,11 @@ public class SseBroadcaster {
         emitter.onTimeout(() -> shipperEmitters.remove(emitter));
         emitter.onError(e -> shipperEmitters.remove(emitter));
         return emitter;
+    }
+
+    /** 패키지 내부 테스트 전용 — conflation 버퍼 상태 검증용(send 자체는 컨테이너 없이 테스트 불가). */
+    ReadingStreamEvent pendingReadingFor(String trackerId) {
+        return pendingReadings.get(trackerId);
     }
 
     /** 패키지 내부 테스트 전용 접근자 — 초기화 안 된 SseEmitter.send()는 컨테이너 없이 항상
@@ -69,6 +86,7 @@ public class SseBroadcaster {
     /**
      * 수집(ingest) 요청 스레드가 SSE 전송을 기다리지 않도록 별도 스레드에서 처리한다(NFR-3와 동일한
      * 이유 — 예측/알림/실시간 스트림처럼 부가 기능은 절대 수집·저장 경로를 막으면 안 된다).
+     * reading은 여기서 보내지 않고 conflation 버퍼에 적재만 한다 — 송신은 {@link #flushReadings}.
      */
     @Async
     @EventListener
@@ -77,7 +95,7 @@ public class SseBroadcaster {
                 ? TrackerStatus.BREACH
                 : TrackerStatus.SAFE;
 
-        broadcastToTracker(event.trackerId(), "reading", new ReadingStreamEvent(
+        pendingReadings.put(event.trackerId(), new ReadingStreamEvent(
                 event.trackerId(),
                 event.temperature(),
                 GeoPoints.lat(event.position()),
@@ -88,6 +106,21 @@ public class SseBroadcaster {
         if (event.justBreached()) {
             broadcastToTracker(event.trackerId(), "breach", new BreachStreamEvent(
                     event.trackerId(), event.temperature(), event.thresholdTemp(), event.recordedAt()));
+        }
+    }
+
+    /**
+     * conflation 버퍼 flush — 1초 주기(fixedDelay라 한 바퀴가 오래 걸리면 겹치지 않고 순연).
+     * out-of-order 걱정 없음: 버퍼에는 어차피 tracker_latest 갱신(UPDATED)을 통과한 최신값만
+     * 들어온다. 구독자가 없으면 send가 no-op이라 버퍼만 비운다.
+     */
+    @Scheduled(fixedDelay = 1_000)
+    public void flushReadings() {
+        for (String trackerId : pendingReadings.keySet()) {
+            ReadingStreamEvent event = pendingReadings.remove(trackerId);
+            if (event != null) {
+                broadcastToTracker(trackerId, "reading", event);
+            }
         }
     }
 

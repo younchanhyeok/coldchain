@@ -12,7 +12,9 @@ import com.coldchain.tracker.domain.TrackerLatest;
 import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import java.time.Duration;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.OptionalDouble;
 import org.springframework.stereotype.Service;
 
@@ -43,13 +45,22 @@ public class SummaryService {
         int deliveredCount = 0;
         int breachCount = 0;
 
-        // PERF(M6): N+1 — IN_TRANSIT shipment마다 tracker/latest를 findById로 건당 조회한다
-        // (findAllById로 배치 가능). 지금은 정합성엔 문제없는 순수 성능 이슈라 M6 부하테스트에서
-        // 실측 후 고친다.
+        // IN_TRANSIT shipment마다 tracker/latest를 건당 조회하던 N+1을 IN 배치 2쿼리로(M6) —
+        // 부하테스트에서 /summary가 5000 트래커 기준 p50 9.7초까지 밀렸던 원인.
+        List<String> inTransitTrackerIds = shipments.stream()
+                .filter(s -> s.getStatus() == ShipmentStatus.IN_TRANSIT)
+                .map(Shipment::getTrackerId)
+                .distinct()
+                .toList();
+        Map<String, Tracker> trackers = new HashMap<>();
+        trackerRepository.findAllById(inTransitTrackerIds).forEach(t -> trackers.put(t.getId(), t));
+        Map<String, TrackerLatest> latests = new HashMap<>();
+        trackerLatestRepository.findAllById(inTransitTrackerIds).forEach(l -> latests.put(l.getTrackerId(), l));
+
         for (Shipment shipment : shipments) {
             if (shipment.getStatus() == ShipmentStatus.IN_TRANSIT) {
                 inTransit++;
-                if (isBreached(shipment.getTrackerId())) {
+                if (isBreached(trackers.get(shipment.getTrackerId()), latests.get(shipment.getTrackerId()))) {
                     breachCount++;
                 }
             } else if (shipment.getStatus() == ShipmentStatus.DELIVERED) {
@@ -67,16 +78,10 @@ public class SummaryService {
     }
 
     // BREACH 여부만 필요하므로 CAUTION 판정(활성 이상탐지 조회까지 포함하는
-    // TrackerQueryService.computeStatus)을 통째로 타지 않고 온도 비교로 짧게 끊는다 —
-    // 안 그러면 이탈 아닌 진행 중 화물마다 불필요한 anomaly exists 쿼리가 한 번씩 더 나간다.
-    // (이건 N+1 배치 여부와 무관한 별개 최적화 — 요청 수가 아니라 요청당 작업량 문제.)
-    private boolean isBreached(String trackerId) {
-        Tracker tracker = trackerRepository.findById(trackerId).orElse(null);
-        if (tracker == null) {
-            return false;
-        }
-        TrackerLatest latest = trackerLatestRepository.findById(trackerId).orElse(null);
-        if (latest == null || latest.getLastTemp() == null) {
+    // TrackerQueryService의 상태 판정)을 통째로 타지 않고 온도 비교로 짧게 끊는다 —
+    // 안 그러면 이탈 아닌 진행 중 화물마다 불필요한 anomaly 조회가 한 번씩 더 나간다.
+    private boolean isBreached(Tracker tracker, TrackerLatest latest) {
+        if (tracker == null || latest == null || latest.getLastTemp() == null) {
             return false;
         }
         return latest.getLastTemp().compareTo(tracker.getThresholdTemp()) > 0;

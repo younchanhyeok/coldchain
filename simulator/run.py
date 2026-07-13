@@ -69,11 +69,12 @@ async def register_trackers(client: TrackerClient, args, waypoints) -> list[dict
 
 
 async def tracker_loop(client: TrackerClient, t: dict, waypoints, interval: float, route_seconds: float,
-                       metrics: MetricsCollector, verbose: bool):
+                       metrics: MetricsCollector, verbose: bool, batch_size: int):
     # 시작 지터 — 전 트래커가 같은 틱에 몰리는 thundering herd 방지(실제 디바이스도 동기화돼 있지 않다).
     await asyncio.sleep(random.uniform(0, interval))
     t["startTime"] = time.monotonic()
     tick = 0
+    buffer: list[dict] = []  # --batch-size > 1일 때 디바이스 버퍼링 재현
 
     while not t["delivered"]:
         elapsed = time.monotonic() - t["startTime"]
@@ -83,17 +84,27 @@ async def tracker_loop(client: TrackerClient, t: dict, waypoints, interval: floa
         t["seq"] += 1
         recorded_at = datetime.now(timezone.utc).isoformat().replace("+00:00", "Z")
 
+        status = None  # 이번 틱에 HTTP 요청이 없었으면(버퍼 적재만) None
         sent_at = time.monotonic()
         try:
-            status = await client.send_reading(
-                t["trackerId"], t["deviceKey"], temperature, lat, lon, recorded_at, t["seq"])
+            if batch_size <= 1:
+                status = await client.send_reading(
+                    t["trackerId"], t["deviceKey"], temperature, lat, lon, recorded_at, t["seq"])
+            else:
+                buffer.append({"temperature": temperature, "lat": lat, "lon": lon,
+                               "recordedAt": recorded_at, "seq": t["seq"]})
+                if len(buffer) >= batch_size:
+                    status = await client.send_readings_batch(t["trackerId"], t["deviceKey"], buffer)
+                    buffer = []
         except Exception as e:
             status = 0  # 타임아웃/커넥션 예외 — 측정에선 에러로 집계
             if verbose:
                 print(f"{t['trackerId']} 전송 실패: {e}")
-        metrics.record("ingest", status, time.monotonic() - sent_at)
+        if status is not None:
+            # 배치 모드에선 요청 단위 샘플 — 리딩 처리량은 throughput × batch_size (meta에 기록)
+            metrics.record("ingest", status, time.monotonic() - sent_at)
 
-        if verbose:
+        if verbose and status is not None:
             marker = "OK" if status == 202 else f"ERR({status})"
             print(f"{t['trackerId']} temp={temperature:6.2f} seq={t['seq']:4d} {marker}")
 
@@ -149,7 +160,8 @@ async def main_async(args):
         metrics.start_clock()
         tasks = [
             asyncio.create_task(tracker_loop(
-                client, t, waypoints, args.interval, args.route_minutes * 60, metrics, verbose))
+                client, t, waypoints, args.interval, args.route_minutes * 60, metrics, verbose,
+                args.batch_size))
             for t in trackers
         ]
         reporter = asyncio.create_task(report_loop(metrics))
@@ -170,6 +182,7 @@ async def main_async(args):
                 "intervalSeconds": args.interval,
                 "profile": args.profile,
                 "seed": args.seed,
+                "batchSize": args.batch_size,
                 "target": args.target,
                 "startedAt": datetime.now(timezone.utc).isoformat(),
             }
@@ -193,6 +206,9 @@ def main():
     parser.add_argument("--email", default="shipper-a@coldchain.local", help="화주 로그인 이메일(V8 시드 기본값)")
     parser.add_argument("--password", default="coldchain-a", help="화주 로그인 비밀번호(V8 시드 기본값)")
     parser.add_argument("--seed", type=int, default=None, help="온도 곡선·지터 시드(부하테스트 재현성)")
+    parser.add_argument("--batch-size", type=int, default=1,
+                        help="배치 전송 크기(기본 1=단건). >1이면 디바이스가 k건 버퍼링 후 배열 body로 전송 — "
+                             "리딩 신선도(지연)를 희생하고 요청 수를 줄이는 변형 측정용(M6)")
     parser.add_argument("--duration", type=float, default=0,
                         help="측정 시간(초). 0이면 전 트래커 배송완료까지 실행(데모 모드)")
     parser.add_argument("--warmup", type=float, default=0,

@@ -5,6 +5,11 @@ spring:
     url: jdbc:postgresql://${DB_HOST:localhost}:${DB_PORT:5432}/${DB_NAME:coldchain}
     username: ${DB_USER:coldchain}
     password: ${DB_PASSWORD:coldchain}
+    hikari:
+      # M6 부하테스트: 기본 10이 5000 트래커(1000rps × 리딩당 DB 왕복 4회)에서 상시 포화
+      # (active 10/pending 2) → 수집 p99 462ms의 주 원인. PG max_connections(100) 안에서
+      # 30으로 — 앱 풀 30 + psql/도구 여유. 더 키우기 전에 왕복 횟수 자체를 줄인다(Kafka 배치).
+      maximum-pool-size: ${DB_POOL_SIZE:30}
   jpa:
     hibernate:
       ddl-auto: validate

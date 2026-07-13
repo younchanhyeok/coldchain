@@ -98,3 +98,12 @@ class TrackerClient:
                 headers={"X-Device-Key": device_key}) as resp:
             await resp.read()
             return resp.status
+
+    async def send_readings_batch(self, tracker_id: str, device_key: str, readings: list[dict]) -> int:
+        """배치 전송(M6) — 같은 URL에 배열 body. 디바이스가 버퍼링했다 모아 보내는 형상의 재현."""
+        async with self._session.post(
+                f"{self.base_url}/api/v1/trackers/{tracker_id}/readings",
+                json=readings,
+                headers={"X-Device-Key": device_key}) as resp:
+            await resp.read()
+            return resp.status

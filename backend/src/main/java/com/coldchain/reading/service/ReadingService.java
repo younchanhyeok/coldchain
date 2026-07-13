@@ -3,8 +3,10 @@ package com.coldchain.reading.service;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.ResourceNotFoundException;
 import com.coldchain.reading.domain.Reading;
+import com.coldchain.reading.dto.NewReading;
 import com.coldchain.reading.dto.ReadingPoint;
 import com.coldchain.reading.dto.ReadingSeriesResponse;
+import com.coldchain.reading.repository.ReadingBatchWriter;
 import com.coldchain.reading.repository.ReadingRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import java.math.BigDecimal;
@@ -20,16 +22,24 @@ import org.springframework.stereotype.Service;
 public class ReadingService {
 
     private final ReadingRepository readingRepository;
+    private final ReadingBatchWriter readingBatchWriter;
     private final TrackerRepository trackerRepository;
 
-    public ReadingService(ReadingRepository readingRepository, TrackerRepository trackerRepository) {
+    public ReadingService(ReadingRepository readingRepository, ReadingBatchWriter readingBatchWriter,
+            TrackerRepository trackerRepository) {
         this.readingRepository = readingRepository;
+        this.readingBatchWriter = readingBatchWriter;
         this.trackerRepository = trackerRepository;
     }
 
     public Reading save(String trackerId, Instant recordedAt, BigDecimal temperature, Point position) {
         Reading reading = new Reading(trackerId, recordedAt, temperature, position);
         return readingRepository.save(reading);
+    }
+
+    /** 배치 수집(M6) — JDBC 문장 배칭 한 방으로 insert. 단건 save 루프와 달리 왕복이 1회다. */
+    public void saveBatch(String trackerId, List<NewReading> readings) {
+        readingBatchWriter.insertAll(trackerId, readings);
     }
 
     public ReadingSeriesResponse query(String trackerId, Instant from, Instant to, int limit) {
