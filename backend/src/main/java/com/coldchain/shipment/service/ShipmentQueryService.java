@@ -13,6 +13,9 @@ import com.coldchain.tracker.dto.PositionResponse;
 import com.coldchain.tracker.repository.TrackerLatestRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import com.coldchain.tracker.service.TrackerQueryService;
+import java.util.HashMap;
+import java.util.List;
+import java.util.Map;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.stereotype.Service;
@@ -41,20 +44,27 @@ public class ShipmentQueryService {
         Page<Shipment> result = shipmentRepository.findByShipperIdOrderByCreatedAtDesc(
                 authenticatedUserProvider.shipperId(), PageRequest.of(page, size));
 
-        // PERF(M6): N+1 — shipment마다 tracker/latest를 findById로 건당 조회한다(findAllById로
-        // 배치 가능). 지금은 정합성엔 문제없는 순수 성능 이슈라 M6 부하테스트에서 실측 후 고친다.
+        // shipment마다 tracker/latest/prediction/anomaly를 건당 조회하던 N+1을 IN 배치로(M6).
+        // 페이지 크기만큼이라 트래커 목록보다는 덜했지만 같은 패턴은 같은 방식으로 없앤다.
+        List<String> trackerIds = result.getContent().stream().map(Shipment::getTrackerId).distinct().toList();
+        Map<String, Tracker> trackers = new HashMap<>();
+        trackerRepository.findAllById(trackerIds).forEach(t -> trackers.put(t.getId(), t));
+        Map<String, TrackerLatest> latests = new HashMap<>();
+        trackerLatestRepository.findAllById(trackerIds).forEach(l -> latests.put(l.getTrackerId(), l));
+        Map<String, TrackerStatus> statuses = trackerQueryService.computeStatusBatch(trackers.values(), latests);
+
         return new ShipmentListResponse(
-                result.getContent().stream().map(this::toSummary).toList(),
+                result.getContent().stream()
+                        .map(shipment -> toSummary(shipment,
+                                trackers.get(shipment.getTrackerId()),
+                                latests.get(shipment.getTrackerId()),
+                                statuses.get(shipment.getTrackerId())))
+                        .toList(),
                 page, size, result.getTotalElements());
     }
 
-    private ShipmentSummaryResponse toSummary(Shipment shipment) {
-        Tracker tracker = trackerRepository.findById(shipment.getTrackerId()).orElse(null);
-        TrackerLatest latest = tracker != null
-                ? trackerLatestRepository.findById(shipment.getTrackerId()).orElse(null)
-                : null;
-
-        TrackerStatus trackerStatus = tracker != null ? trackerQueryService.computeStatus(tracker, latest) : null;
+    private ShipmentSummaryResponse toSummary(Shipment shipment, Tracker tracker, TrackerLatest latest,
+            TrackerStatus trackerStatus) {
         PositionResponse lastPosition = latest != null && latest.getLastPosition() != null
                 ? new PositionResponse(GeoPoints.lat(latest.getLastPosition()), GeoPoints.lon(latest.getLastPosition()))
                 : null;

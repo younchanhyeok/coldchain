@@ -8,8 +8,11 @@ import com.coldchain.prediction.dto.PredictionResponse;
 import com.coldchain.prediction.repository.PredictionRepository;
 import java.time.Duration;
 import java.time.Instant;
+import java.util.Collection;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
+import java.util.stream.Collectors;
 import org.springframework.stereotype.Service;
 
 /**
@@ -44,10 +47,24 @@ public class PredictionQueryService {
      */
     public Optional<ActivePredictionSummary> findActiveSummary(String trackerId) {
         return predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE)
-                .map(p -> new ActivePredictionSummary(
-                        p.getPredictedBreachAt(),
-                        (int) Duration.between(Instant.now(), p.getPredictedBreachAt()).toMinutes(),
-                        p.getSlopePerMinute()));
+                .map(PredictionQueryService::toActiveSummary);
+    }
+
+    /** {@link #findActiveSummary}의 배치판 — 목록 화면이 트래커마다 건당 조회하면 N+1이라
+     *  IN 한 방으로 가져온다(M6). 활성 예측이 없는 트래커는 맵에 없다. */
+    public Map<String, ActivePredictionSummary> findActiveSummaries(Collection<String> trackerIds) {
+        if (trackerIds.isEmpty()) {
+            return Map.of();
+        }
+        return predictionRepository.findByTrackerIdInAndStatus(trackerIds, PredictionStatus.ACTIVE).stream()
+                .collect(Collectors.toMap(Prediction::getTrackerId, PredictionQueryService::toActiveSummary));
+    }
+
+    private static ActivePredictionSummary toActiveSummary(Prediction p) {
+        return new ActivePredictionSummary(
+                p.getPredictedBreachAt(),
+                (int) Duration.between(Instant.now(), p.getPredictedBreachAt()).toMinutes(),
+                p.getSlopePerMinute());
     }
 
     private PredictionResponse toResponse(Prediction prediction) {

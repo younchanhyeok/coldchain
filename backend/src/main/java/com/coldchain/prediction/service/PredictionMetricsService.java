@@ -70,7 +70,12 @@ public class PredictionMetricsService {
 
         int missedBreaches = countMissedBreaches(from, to);
 
-        List<EpisodeSummary> episodeSummaries = episodes.stream().map(this::toEpisodeSummary).toList();
+        Map<String, String> productNames = new HashMap<>();
+        trackerRepository.findAllById(episodes.stream().map(Prediction::getTrackerId).distinct().toList())
+                .forEach(tracker -> productNames.put(tracker.getId(), tracker.getProductName()));
+        List<EpisodeSummary> episodeSummaries = episodes.stream()
+                .map(p -> toEpisodeSummary(p, productNames))
+                .toList();
 
         return new PredictionMetricsResponse(
                 modelVersion, new Period(from, to), episodes.size(), truePositives, falsePositives, missedBreaches,
@@ -111,12 +116,10 @@ public class PredictionMetricsService {
         return missed;
     }
 
-    // PERF(M6): N+1 — episodes마다 tracker를 findById로 건당 조회한다(findAllById로 배치
-    // 가능). 어드민 전용·저빈도 호출이라 지금은 무시 가능한 수준 — 부하테스트에서 실측 후 고친다.
-    private EpisodeSummary toEpisodeSummary(Prediction prediction) {
-        String productName = trackerRepository.findById(prediction.getTrackerId())
-                .map(tracker -> tracker.getProductName())
-                .orElse(null);
+    /** 에피소드마다 tracker를 건당 조회하던 N+1을 호출부에서 배치로 만든 productName 맵 참조로
+     *  교체(M6) — 어드민 전용·저빈도라 실측 병목은 아니었지만 같은 패턴은 같은 방식으로 없앤다. */
+    private EpisodeSummary toEpisodeSummary(Prediction prediction, Map<String, String> productNames) {
+        String productName = productNames.get(prediction.getTrackerId());
         Integer leadTimeMinutes = prediction.getStatus() == PredictionStatus.BREACHED && prediction.getBreachedAt() != null
                 ? (int) Duration.between(prediction.getCreatedAt(), prediction.getBreachedAt()).toMinutes()
                 : null;

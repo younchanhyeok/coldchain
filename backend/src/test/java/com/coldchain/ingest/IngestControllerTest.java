@@ -120,6 +120,95 @@ class IngestControllerTest {
     }
 
     @Test
+    void rejectsMissingFieldWith400() throws Exception {
+        // M6에서 body를 JsonNode로 받으며 검증이 수동으로 바뀜 — @Valid 시절의 400 계약 유지 확인.
+        TrackerRegisterResponse tracker = givenRegisteredTracker("TRK-INGEST-VAL");
+
+        mockMvc.perform(post("/api/v1/trackers/{id}/readings", tracker.trackerId())
+                        .header("X-Device-Key", tracker.deviceKey())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"lat": 37.4979, "lon": 127.0276, "recordedAt": "%s"}
+                                """.formatted(Instant.now())))
+                .andExpect(status().isBadRequest())
+                .andExpect(jsonPath("$.code").value("VALIDATION_FAILED"))
+                .andExpect(jsonPath("$.errors[0].field").value("temperature"));
+    }
+
+    // ── 배치 전송 (M6) — 같은 URL에 배열 body, 202 + {accepted, rejected[]} 부분 성공 ──
+
+    @Test
+    void acceptsBatchAndCollapsesLatestToNewest() throws Exception {
+        TrackerRegisterResponse tracker = givenRegisteredTracker("TRK-INGEST-B01");
+        Instant base = Instant.now().minusSeconds(60);
+
+        mockMvc.perform(post("/api/v1/trackers/{id}/readings", tracker.trackerId())
+                        .header("X-Device-Key", tracker.deviceKey())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                [
+                                  {"temperature": 5.1, "lat": 37.49, "lon": 127.02, "recordedAt": "%s", "seq": 1},
+                                  {"temperature": 5.9, "lat": 37.50, "lon": 127.03, "recordedAt": "%s", "seq": 3},
+                                  {"temperature": 5.5, "lat": 37.49, "lon": 127.02, "recordedAt": "%s", "seq": 2}
+                                ]
+                                """.formatted(base, base.plusSeconds(20), base.plusSeconds(10))))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(3))
+                .andExpect(jsonPath("$.rejected").isEmpty());
+
+        // 원시는 전부 저장, tracker_latest는 배열 중 최신 recordedAt(온도 5.9)으로 collapse.
+        mockMvc.perform(get("/api/v1/trackers/{id}/readings", tracker.trackerId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readings.length()").value(3));
+        mockMvc.perform(get("/api/v1/trackers/{id}", tracker.trackerId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.lastTemperature").value(5.9));
+    }
+
+    @Test
+    void batchRejectsInvalidElementsButSavesRest() throws Exception {
+        TrackerRegisterResponse tracker = givenRegisteredTracker("TRK-INGEST-B02");
+        Instant now = Instant.now();
+
+        mockMvc.perform(post("/api/v1/trackers/{id}/readings", tracker.trackerId())
+                        .header("X-Device-Key", tracker.deviceKey())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                [
+                                  {"temperature": 5.1, "lat": 37.49, "lon": 127.02, "recordedAt": "%s"},
+                                  {"temperature": 200.0, "lat": 37.49, "lon": 127.02, "recordedAt": "%s"},
+                                  {"lat": 37.49, "lon": 127.02, "recordedAt": "%s"}
+                                ]
+                                """.formatted(now, now, now)))
+                .andExpect(status().isAccepted())
+                .andExpect(jsonPath("$.accepted").value(1))
+                .andExpect(jsonPath("$.rejected.length()").value(2))
+                .andExpect(jsonPath("$.rejected[0].index").value(1))
+                .andExpect(jsonPath("$.rejected[0].code").value("SEMANTIC_INVALID"))
+                .andExpect(jsonPath("$.rejected[1].index").value(2))
+                .andExpect(jsonPath("$.rejected[1].code").value("VALIDATION_FAILED"));
+
+        mockMvc.perform(get("/api/v1/trackers/{id}/readings", tracker.trackerId()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readings.length()").value(1));
+    }
+
+    @Test
+    void batchOverLimitIsRejectedAsWhole() throws Exception {
+        TrackerRegisterResponse tracker = givenRegisteredTracker("TRK-INGEST-B03");
+        String element = """
+                {"temperature": 5.1, "lat": 37.49, "lon": 127.02, "recordedAt": "%s"}""".formatted(Instant.now());
+        String body = "[" + (element + ",").repeat(500) + element + "]"; // 501건
+
+        mockMvc.perform(post("/api/v1/trackers/{id}/readings", tracker.trackerId())
+                        .header("X-Device-Key", tracker.deviceKey())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(body))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SEMANTIC_INVALID"));
+    }
+
+    @Test
     void ingestedReadingIsQueryable() throws Exception {
         TrackerRegisterResponse tracker = givenRegisteredTracker("TRK-INGEST-005");
         Instant recordedAt = Instant.now();

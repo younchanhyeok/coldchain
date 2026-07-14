@@ -12,6 +12,10 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
 
     Optional<Prediction> findByTrackerIdAndStatus(String trackerId, PredictionStatus status);
 
+    /** 목록 화면 배치 조회 — 트래커별 건당 조회(N+1)를 IN 한 방으로. M6 부하테스트에서
+     *  대시보드 조회를 5000 트래커 기준 22.7초까지 밀리게 한 왕복 중 하나. */
+    List<Prediction> findByTrackerIdInAndStatus(Collection<String> trackerIds, PredictionStatus status);
+
     Optional<Prediction> findTopByTrackerIdOrderByCreatedAtDesc(String trackerId);
 
     /** EXPIRED 스케줄러 — 예상 이탈 시각을 넘기고도 여전히 ACTIVE인 것들. */
