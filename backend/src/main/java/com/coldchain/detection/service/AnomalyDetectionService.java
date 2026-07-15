@@ -36,10 +36,10 @@ public class AnomalyDetectionService {
     private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate transactionTemplate;
 
-    // @Async 리스너는 트래커별 순서를 보장하지 않는다(SimpleAsyncTaskExecutor는 호출마다 새 스레드) —
-    // 같은 트래커의 리딩이 몰릴 때 윈도우 push나 cleanStreak 증가가 동시에 겹치면 유실될 수 있어
-    // 트래커별로 직렬화한다. 트래커 수만큼 락 객체가 쌓이지만(제거 안 함) M3 규모에선 무시할 크기 —
-    // M6 부하테스트에서 트래커 수가 커지면 재검토.
+    // 트래커별 직렬화 락 — @Async 리스너(direct 모드)는 같은 트래커의 리딩을 서로 다른 스레드에
+    // 배정할 수 있어 윈도우 push·cleanStreak 갱신이 겹치면 유실된다. kafka 모드(M6~ 기본)에서는
+    // 파티션(key=trackerId)이 같은 트래커를 한 컨슈머 스레드로 직렬화하므로 이 락은 항상 비경쟁
+    // (uncontended synchronized ≈ 공짜)이다 — direct 모드 A/B 비교를 위해 남겨둔다.
     private final ConcurrentHashMap<String, Object> trackerLocks = new ConcurrentHashMap<>();
 
     public AnomalyDetectionService(TemperatureWindowRepository windowRepository,

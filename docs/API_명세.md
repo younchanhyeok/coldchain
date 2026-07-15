@@ -115,9 +115,9 @@
 { "accepted": true, "serverTs": "2026-07-05T03:12:45Z" }
 ```
 
-- **202인 이유:** 수신 확인만 보장, 다운스트림(탐지·예측)은 비동기. M6 Kafka 전환 시에도 계약 불변 — HTTP 동기 저장(M1)→큐 발행(M6)으로 내부만 바뀜.
-- `seq`: 디바이스 단조증가 시퀀스(선택). out-of-order·중복 판정 보조.
-- 최신상태(tracker_latest) upsert는 `recordedAt`(+version) guard 낙관적 락 — 과거 데이터가 늦게 도착하면 원시 reading은 저장하되 최신상태는 갱신하지 않음(이 경우도 202. 409는 upsert 충돌 재시도 소진 시).
+- **202인 이유:** 수신 확인만 보장, 다운스트림(탐지·예측)은 비동기. M6 Kafka 전환에도 계약 불변 — HTTP 동기 저장(M1)→큐 발행(M6)으로 내부만 바뀜. 202가 보장하는 지점: kafka 모드(M6~ 기본)=브로커 영속, direct 모드(A/B 토글)=DB 저장.
+- `seq`: 디바이스 단조증가 시퀀스(선택). out-of-order·중복 판정 보조. 같은 `(trackerId, recordedAt)` 재전송은 멱등 처리(V10 유니크 — at-least-once 재전달·클라이언트 재시도 흡수).
+- 최신상태(tracker_latest) upsert는 `recordedAt`(+version) guard 낙관적 락 — 과거 데이터가 늦게 도착하면 원시 reading은 저장하되 최신상태는 갱신하지 않음(이 경우도 202). **409(upsert 충돌 재시도 소진)는 direct 모드 한정** — kafka 모드에선 파티션(key=trackerId)이 트래커별 쓰기를 직렬화해 충돌 자체가 없다.
 - 배치 전송(M6~): 같은 URL에 **배열 body** 허용(최대 500건, 초과는 422). `207`은 쓰지 않고 202 + 요약 반환 — 요소별 실패는 `rejected[]`로 모으고 나머지는 저장하는 부분 성공. 원시 저장은 JDBC 배치, 최신상태 upsert는 배열 중 최신 `recordedAt` 1건으로 collapse.
 
 ```json
@@ -127,7 +127,7 @@
 { "accepted": 48, "rejected": [ { "index": 3, "code": "SEMANTIC_INVALID", "reason": "온도는 -90~60도 범위여야 합니다: 200.0" } ], "serverTs": "..." }
 ```
 
-에러: 401(키 불일치), 404(미등록 트래커), 422(온도 범위 -90~+60℃ 밖, 미래 recordedAt >5m).
+에러: 401(키 불일치), 404(미등록 트래커), 422(온도 범위 -90~+60℃ 밖, 미래 recordedAt >5m), 503(kafka 모드에서 브로커 발행 실패 — 저장 보장 없이 202를 주지 않는다, `INGEST_UNAVAILABLE`).
 
 ---
 

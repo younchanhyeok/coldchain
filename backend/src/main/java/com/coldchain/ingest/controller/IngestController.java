@@ -1,8 +1,6 @@
 package com.coldchain.ingest.controller;
 
-import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.DeviceKeyUnauthorizedException;
-import com.coldchain.common.error.OutOfOrderConflictException;
 import com.coldchain.common.error.RequestFieldValidationException;
 import com.coldchain.common.error.RequestFieldValidationException.FieldViolation;
 import com.coldchain.common.error.ResourceNotFoundException;
@@ -11,14 +9,9 @@ import com.coldchain.ingest.dto.BatchIngestResponse;
 import com.coldchain.ingest.dto.BatchIngestResponse.RejectedReading;
 import com.coldchain.ingest.dto.IngestAcceptedResponse;
 import com.coldchain.ingest.dto.ReadingIngestRequest;
-import com.coldchain.ingest.event.ReadingRecordedEvent;
-import com.coldchain.reading.dto.NewReading;
-import com.coldchain.reading.service.ReadingService;
+import com.coldchain.ingest.pipeline.IngestPipeline;
 import com.coldchain.tracker.domain.Tracker;
 import com.coldchain.tracker.repository.TrackerRepository;
-import com.coldchain.tracker.service.TrackerLatestService;
-import com.coldchain.tracker.service.TrackerLatestUpsertOutcome;
-import com.coldchain.tracker.service.TrackerLatestUpsertResult;
 import com.coldchain.tracker.service.TrackerService;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -29,8 +22,6 @@ import java.time.Instant;
 import java.util.ArrayList;
 import java.util.Comparator;
 import java.util.List;
-import org.locationtech.jts.geom.Point;
-import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.PathVariable;
@@ -41,6 +32,9 @@ import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
 
 /**
+ * 수집 API 진입점 — 인증(디바이스 키)·검증까지만 하고, 저장 경로는 IngestPipeline에 위임한다
+ * (M6 PR3: direct=동기 저장 | kafka=브로커 발행, app.ingest.mode 토글).
+ *
  * 단건과 배치(배열 body, M6)를 같은 URL에서 받는다 — body shape으로는 핸들러를 나눌 수 없어
  * JsonNode로 받아 분기하고, 단건 경로의 필드 검증은 @Valid 대신 Validator 수동 호출로
  * 같은 400/VALIDATION_FAILED 계약을 유지한다.
@@ -56,19 +50,14 @@ public class IngestController {
     private static final int MAX_BATCH_SIZE = 500;
 
     private final TrackerRepository trackerRepository;
-    private final ReadingService readingService;
-    private final TrackerLatestService trackerLatestService;
-    private final ApplicationEventPublisher eventPublisher;
+    private final IngestPipeline ingestPipeline;
     private final ObjectMapper objectMapper;
     private final Validator validator;
 
-    public IngestController(TrackerRepository trackerRepository, ReadingService readingService,
-            TrackerLatestService trackerLatestService, ApplicationEventPublisher eventPublisher,
+    public IngestController(TrackerRepository trackerRepository, IngestPipeline ingestPipeline,
             ObjectMapper objectMapper, Validator validator) {
         this.trackerRepository = trackerRepository;
-        this.readingService = readingService;
-        this.trackerLatestService = trackerLatestService;
-        this.eventPublisher = eventPublisher;
+        this.ingestPipeline = ingestPipeline;
         this.objectMapper = objectMapper;
         this.validator = validator;
     }
@@ -100,21 +89,15 @@ public class IngestController {
         }
         validate(request);
 
-        BigDecimal temperature = BigDecimal.valueOf(request.temperature());
-        Point position = GeoPoints.of(request.lat(), request.lon());
-
-        readingService.save(tracker.getId(), request.recordedAt(), temperature, position);
-
-        upsertLatestAndPublish(tracker, request.recordedAt(), temperature, position);
+        ingestPipeline.ingest(tracker, request);
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new IngestAcceptedResponse(true, Instant.now()));
     }
 
     /**
-     * 배치(M6): 요소별 검증 실패는 rejected[]로 모으고 나머지는 저장하는 부분 성공 —
-     * 전체는 항상 202다(401/404 같은 요청 단위 실패 제외). 원시 저장은 JDBC 배치 1왕복,
-     * latest upsert는 최신 recordedAt 1건으로 collapse — 같은 규칙을 PR3 Kafka 컨슈머가 물려받는다.
+     * 배치(M6): 요소별 검증 실패는 rejected[]로 모으고 나머지는 처리하는 부분 성공 —
+     * 전체는 항상 202다(401/404 같은 요청 단위 실패 제외).
      */
     private ResponseEntity<BatchIngestResponse> ingestBatch(Tracker tracker, JsonNode body) {
         if (body.size() > MAX_BATCH_SIZE) {
@@ -141,31 +124,12 @@ public class IngestController {
             }
         }
 
-        readingService.saveBatch(tracker.getId(), valid.stream()
-                .map(r -> new NewReading(r.recordedAt(), BigDecimal.valueOf(r.temperature()), r.lat(), r.lon()))
-                .toList());
-
-        valid.stream().max(Comparator.comparing(ReadingIngestRequest::recordedAt)).ifPresent(newest ->
-                upsertLatestAndPublish(tracker, newest.recordedAt(),
-                        BigDecimal.valueOf(newest.temperature()), GeoPoints.of(newest.lat(), newest.lon())));
+        if (!valid.isEmpty()) {
+            ingestPipeline.ingestBatch(tracker, valid);
+        }
 
         return ResponseEntity.status(HttpStatus.ACCEPTED)
                 .body(new BatchIngestResponse(valid.size(), rejected, Instant.now()));
-    }
-
-    private void upsertLatestAndPublish(Tracker tracker, Instant recordedAt, BigDecimal temperature, Point position) {
-        TrackerLatestUpsertResult result = trackerLatestService.upsert(
-                tracker.getId(), recordedAt, temperature, position);
-
-        if (result.outcome() == TrackerLatestUpsertOutcome.CONFLICT) {
-            throw new OutOfOrderConflictException(
-                    "최신 상태 갱신 충돌로 재시도를 모두 소진했습니다: " + tracker.getId());
-        }
-
-        if (result.outcome() == TrackerLatestUpsertOutcome.UPDATED) {
-            publishReadingRecorded(tracker.getId(), temperature, position, recordedAt, tracker.getThresholdTemp(),
-                    result.previousTemperature());
-        }
     }
 
     private ReadingIngestRequest bind(JsonNode node) {
@@ -182,16 +146,6 @@ public class IngestController {
                 .sorted(Comparator.comparing(v -> v.getPropertyPath().toString()))
                 .map(v -> new FieldViolation(v.getPropertyPath().toString(), v.getMessage()))
                 .toList();
-    }
-
-    private void publishReadingRecorded(String trackerId, BigDecimal temperature, Point position,
-            Instant recordedAt, BigDecimal thresholdTemp, BigDecimal previousTemperature) {
-        boolean wasOverThreshold = previousTemperature != null && previousTemperature.compareTo(thresholdTemp) > 0;
-        boolean isOverThreshold = temperature.compareTo(thresholdTemp) > 0;
-        boolean justBreached = isOverThreshold && !wasOverThreshold;
-
-        eventPublisher.publishEvent(
-                new ReadingRecordedEvent(trackerId, temperature, position, recordedAt, thresholdTemp, justBreached));
     }
 
     private void validate(ReadingIngestRequest request) {
