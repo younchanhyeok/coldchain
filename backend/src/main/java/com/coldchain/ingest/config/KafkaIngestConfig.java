@@ -12,6 +12,7 @@ import org.apache.kafka.common.serialization.ByteArraySerializer;
 import org.apache.kafka.common.serialization.StringDeserializer;
 import org.apache.kafka.common.serialization.StringSerializer;
 import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
+import org.springframework.boot.autoconfigure.kafka.KafkaConnectionDetails;
 import org.springframework.boot.autoconfigure.kafka.KafkaProperties;
 import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
@@ -59,8 +60,12 @@ public class KafkaIngestConfig {
 
     @Bean
     public ProducerFactory<String, ReadingMessage> readingProducerFactory(
-            KafkaProperties kafkaProperties, ObjectMapper objectMapper) {
+            KafkaProperties kafkaProperties, KafkaConnectionDetails connectionDetails, ObjectMapper objectMapper) {
         Map<String, Object> config = new HashMap<>(kafkaProperties.buildProducerProperties(null));
+        // KafkaProperties만 읽으면 @ServiceConnection(Testcontainers)의 브로커 주소를 무시하게 된다 —
+        // 로컬에선 우연히 떠 있던 compose 브로커(yml 기본 localhost:9092)로 붙어 가짜 통과, CI에선
+        // 실패로 실측된 함정. ConnectionDetails가 프로퍼티·@ServiceConnection 양쪽을 모두 대변한다.
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connectionDetails.getBootstrapServers());
         config.put(ProducerConfig.ENABLE_IDEMPOTENCE_CONFIG, true); // acks=all + 재전송 중복 방지
         config.put(ProducerConfig.LINGER_MS_CONFIG, 5);
         // Spring의 ObjectMapper 재사용 — JSR310(Instant) 직렬화 설정을 앱 전체와 통일.
@@ -76,8 +81,9 @@ public class KafkaIngestConfig {
 
     @Bean
     public ConsumerFactory<String, ReadingMessage> readingConsumerFactory(
-            KafkaProperties kafkaProperties, ObjectMapper objectMapper) {
+            KafkaProperties kafkaProperties, KafkaConnectionDetails connectionDetails, ObjectMapper objectMapper) {
         Map<String, Object> config = new HashMap<>(kafkaProperties.buildConsumerProperties(null));
+        config.put(ConsumerConfig.BOOTSTRAP_SERVERS_CONFIG, connectionDetails.getBootstrapServers());
         config.put(ConsumerConfig.MAX_POLL_RECORDS_CONFIG, 500); // poll 배치 = insert 배치 상한
         JsonDeserializer<ReadingMessage> valueDeserializer =
                 new JsonDeserializer<>(ReadingMessage.class, objectMapper);
@@ -88,7 +94,7 @@ public class KafkaIngestConfig {
     @Bean
     public ConcurrentKafkaListenerContainerFactory<String, ReadingMessage> readingListenerContainerFactory(
             ConsumerFactory<String, ReadingMessage> readingConsumerFactory,
-            KafkaProperties kafkaProperties, ObjectMapper objectMapper) {
+            KafkaProperties kafkaProperties, KafkaConnectionDetails connectionDetails, ObjectMapper objectMapper) {
         ConcurrentKafkaListenerContainerFactory<String, ReadingMessage> factory =
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(readingConsumerFactory);
@@ -99,15 +105,17 @@ public class KafkaIngestConfig {
         // 추가 시 파티션 재분배)의 영역이다.
         factory.setConcurrency(6);
         factory.setCommonErrorHandler(new DefaultErrorHandler(
-                new DeadLetterPublishingRecoverer(dltTemplate(kafkaProperties, objectMapper),
+                new DeadLetterPublishingRecoverer(dltTemplate(kafkaProperties, connectionDetails, objectMapper),
                         (record, ex) -> new TopicPartition(READINGS_DLT, record.partition())),
                 new FixedBackOff(1_000L, 2)));
         return factory;
     }
 
     /** DLT 전용 템플릿 — 역직렬화 실패 레코드의 key/value는 byte[]로 올 수 있어 타입별로 위임한다. */
-    private KafkaTemplate<Object, Object> dltTemplate(KafkaProperties kafkaProperties, ObjectMapper objectMapper) {
+    private KafkaTemplate<Object, Object> dltTemplate(KafkaProperties kafkaProperties,
+            KafkaConnectionDetails connectionDetails, ObjectMapper objectMapper) {
         Map<String, Object> config = new HashMap<>(kafkaProperties.buildProducerProperties(null));
+        config.put(ProducerConfig.BOOTSTRAP_SERVERS_CONFIG, connectionDetails.getBootstrapServers());
         DefaultKafkaProducerFactory<Object, Object> factory = new DefaultKafkaProducerFactory<>(config);
         factory.setKeySerializerSupplier(() -> new DelegatingByTypeSerializer(objectMapper));
         factory.setValueSerializerSupplier(() -> new DelegatingByTypeSerializer(objectMapper));
