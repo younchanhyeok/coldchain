@@ -25,6 +25,8 @@ public class TestcontainersConfiguration {
 
 	// JwtTokenProvider가 시크릿 미설정 시 기동을 거부(fail-fast)하므로, 이 설정을 import하는
 	// 모든 통합 테스트에 테스트 전용 시크릿을 일괄 주입한다(테스트마다 properties 반복 방지).
+	// (수집 모드는 여기가 아니라 test resources의 application.properties에서 direct로 고정한다 —
+	// @ConditionalOnProperty가 조건 평가 시점에 읽어야 해서 레지스트라로는 안 된다.)
 	@Bean
 	public DynamicPropertyRegistrar authTestProperties() {
 		return registry -> registry.add("app.auth.jwt-secret",

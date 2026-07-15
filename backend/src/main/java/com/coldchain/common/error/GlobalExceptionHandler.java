@@ -53,6 +53,12 @@ public class GlobalExceptionHandler {
         return problem(HttpStatus.CONFLICT, "READING_OUT_OF_ORDER", ex.getMessage());
     }
 
+    /** 수집 큐(Kafka) 발행 실패 — M6부터 브로커는 수집 경로의 일부(저장 보장 없이 202를 줄 수 없다). */
+    @ExceptionHandler(IngestUnavailableException.class)
+    public ProblemDetail handleIngestUnavailable(IngestUnavailableException ex) {
+        return problem(HttpStatus.SERVICE_UNAVAILABLE, "INGEST_UNAVAILABLE", ex.getMessage());
+    }
+
     @ExceptionHandler(MethodArgumentNotValidException.class)
     public ProblemDetail handleValidationFailed(MethodArgumentNotValidException ex) {
         ProblemDetail detail = problem(HttpStatus.BAD_REQUEST, "VALIDATION_FAILED", "요청 필드 검증에 실패했습니다.");
