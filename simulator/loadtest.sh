@@ -62,6 +62,9 @@ API_PID=$!
   --ready-file "$READY_FILE" --report-out "$OUT/ingest.json" 2>&1 | tee "$OUT/simulator.log"
 
 curl -s "${TARGET}/actuator/prometheus" > "$OUT/prometheus-after.txt" || true
+# kafka 모드면 컨슈머 랙 캡처 — "202는 빨라졌는데 다운스트림이 따라오나"의 직접 증거.
+"${COMPOSE[@]}" exec -T kafka /opt/kafka/bin/kafka-consumer-groups.sh --bootstrap-server localhost:9092 \
+  --describe --group coldchain-ingest > "$OUT/consumer-lag.txt" 2>&1 || true
 "${COMPOSE[@]}" exec -T postgres psql -U "${DB_USER:-coldchain}" -d "${DB_NAME:-coldchain}" -c \
   "SELECT calls, round(mean_exec_time::numeric, 2) AS mean_ms,
           round(total_exec_time::numeric) AS total_ms, left(query, 120) AS query

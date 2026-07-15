@@ -93,8 +93,11 @@ public class KafkaIngestConfig {
                 new ConcurrentKafkaListenerContainerFactory<>();
         factory.setConsumerFactory(readingConsumerFactory);
         factory.setBatchListener(true);
-        // 파티션 6 ÷ 컨슈머 3 = 스레드당 2파티션 — 단일 인스턴스 기준. 수평 확장 시 인스턴스가 나눠 갖는다.
-        factory.setConcurrency(3);
+        // 파티션 수(6)와 동일 — 5000 트래커 실측에서 concurrency 3은 소비 494/s로 유입(1000/s)을
+        // 못 따라가 컨슈머 랙이 무한 성장했다(e2e p50 82s). 컨슈머 처리량의 지배 비용은 리딩별
+        // L2 분석이므로 스레드당 1파티션이 단일 인스턴스의 상한 — 그 이상은 수평 확장(인스턴스
+        // 추가 시 파티션 재분배)의 영역이다.
+        factory.setConcurrency(6);
         factory.setCommonErrorHandler(new DefaultErrorHandler(
                 new DeadLetterPublishingRecoverer(dltTemplate(kafkaProperties, objectMapper),
                         (record, ex) -> new TopicPartition(READINGS_DLT, record.partition())),
