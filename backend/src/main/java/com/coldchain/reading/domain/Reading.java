@@ -2,25 +2,30 @@ package com.coldchain.reading.domain;
 
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
-import jakarta.persistence.GeneratedValue;
-import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
+import jakarta.persistence.IdClass;
 import jakarta.persistence.Table;
 import java.math.BigDecimal;
 import java.time.Instant;
 import org.locationtech.jts.geom.Point;
 
+/**
+ * hypertable 전환(M6 PR4) 이후 **읽기 전용 엔티티**다 — 복합키(@IdClass)에는 IDENTITY 채번을
+ * 쓸 수 없어(@GeneratedValue 미지원) JPA로 persist하면 id가 null이라 실패한다. 쓰기는 전부
+ * ReadingBatchWriter(JDBC, id는 DB DEFAULT nextval)로 — PR3에서 이미 일원화된 경로.
+ */
 @Entity
 @Table(name = "reading")
+@IdClass(ReadingId.class)
 public class Reading {
 
     @Id
-    @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Long id;
 
     @Column(name = "tracker_id", nullable = false)
     private String trackerId;
 
+    @Id
     @Column(name = "recorded_at", nullable = false)
     private Instant recordedAt;
 

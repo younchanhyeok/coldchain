@@ -11,10 +11,14 @@ import org.testcontainers.utility.DockerImageName;
 @TestConfiguration(proxyBeanMethods = false)
 public class TestcontainersConfiguration {
 
+	// TimescaleDB + PostGIS(M6 PR4) — 프로덕션 compose와 같은 이미지로 hypertable 마이그레이션까지
+	// 통합 테스트가 실제로 검증한다. 첫 pull이 크므로(수 GB) CI 캐시가 없으면 느릴 수 있다.
 	@Bean
 	@ServiceConnection
 	public PostgreSQLContainer<?> postgresContainer() {
-		return new PostgreSQLContainer<>(DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres"));
+		return new PostgreSQLContainer<>(
+				DockerImageName.parse("timescale/timescaledb-ha:pg16").asCompatibleSubstituteFor("postgres"))
+				.withCommand("postgres", "-c", "shared_preload_libraries=timescaledb");
 	}
 
 	@Bean

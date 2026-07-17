@@ -22,7 +22,8 @@ public class KafkaTestcontainersConfiguration {
 	@ServiceConnection
 	public PostgreSQLContainer<?> postgresContainer() {
 		return new PostgreSQLContainer<>(
-				DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres"));
+				DockerImageName.parse("timescale/timescaledb-ha:pg16").asCompatibleSubstituteFor("postgres"))
+				.withCommand("postgres", "-c", "shared_preload_libraries=timescaledb");
 	}
 
 	@Bean

@@ -1,9 +1,13 @@
 services:
   postgres:
-    image: postgis/postgis:16-3.4
-    # pg_stat_statements — M6 부하테스트 병목 분석용(top query 캡처). preload만 여기서 걸고
-    # CREATE EXTENSION은 loadtest.sh가 실행마다 보장한다(fresh 볼륨에서 사라지므로).
-    command: ["postgres", "-c", "shared_preload_libraries=pg_stat_statements"]
+    # M6 PR4: TimescaleDB로 전환(NFR-4). ha 이미지는 TimescaleDB + PostGIS를 함께 담아
+    # "한 DB에 시계열 hypertable + 공간"을 그대로 유지한다. 데이터 디렉터리가 표준 postgres와
+    # 달라(/home/postgres/pgdata) 기존 볼륨은 재사용 불가 — 어차피 fresh로 간다(down -v).
+    image: timescale/timescaledb-ha:pg16
+    # timescaledb는 반드시 preload, pg_stat_statements는 부하테스트 top query 캡처용.
+    # CREATE EXTENSION은 Flyway(V1 postgis, V11 timescaledb)가 하고, pg_stat_statements만
+    # loadtest.sh가 실행마다 보장한다(fresh 볼륨에서 사라지므로).
+    command: ["postgres", "-c", "shared_preload_libraries=timescaledb,pg_stat_statements"]
     environment:
       POSTGRES_DB: ${DB_NAME:-coldchain}
       POSTGRES_USER: ${DB_USER:-coldchain}
@@ -11,7 +15,7 @@ services:
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/var/lib/postgresql/data
+      - postgres_data:/home/postgres/pgdata
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-coldchain} -d ${DB_NAME:-coldchain}"]
       interval: 5s
