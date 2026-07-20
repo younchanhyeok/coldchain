@@ -9,6 +9,7 @@ import com.coldchain.DefaultShipperAuthConfig;
 import com.coldchain.TestcontainersConfiguration;
 import com.coldchain.tracker.dto.TrackerRegisterResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import java.time.Duration;
 import java.time.Instant;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -115,6 +116,22 @@ class IngestControllerTest {
                         .content("""
                                 {"temperature": 5.8, "lat": 37.4979, "lon": 127.0276, "recordedAt": "%s"}
                                 """.formatted(Instant.now().plusSeconds(3600))))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SEMANTIC_INVALID"));
+    }
+
+    @Test
+    void rejectsTooOldRecordedAt() throws Exception {
+        // M6 PR4: recorded_at이 hypertable 파티션 컬럼이 되면서 시계 리셋 디바이스의 epoch급
+        // timestamp가 날짜당 chunk를 만드는 것을 막는 과거 하한(7일).
+        TrackerRegisterResponse tracker = givenRegisteredTracker("TRK-INGEST-OLD");
+
+        mockMvc.perform(post("/api/v1/trackers/{id}/readings", tracker.trackerId())
+                        .header("X-Device-Key", tracker.deviceKey())
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"temperature": 5.8, "lat": 37.4979, "lon": 127.0276, "recordedAt": "%s"}
+                                """.formatted(Instant.now().minus(Duration.ofDays(8)))))
                 .andExpect(status().isUnprocessableEntity())
                 .andExpect(jsonPath("$.code").value("SEMANTIC_INVALID"));
     }

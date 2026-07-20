@@ -127,7 +127,7 @@
 { "accepted": 48, "rejected": [ { "index": 3, "code": "SEMANTIC_INVALID", "reason": "온도는 -90~60도 범위여야 합니다: 200.0" } ], "serverTs": "..." }
 ```
 
-에러: 401(키 불일치), 404(미등록 트래커), 422(온도 범위 -90~+60℃ 밖, 미래 recordedAt >5m), 503(kafka 모드에서 브로커 발행 실패 — 저장 보장 없이 202를 주지 않는다, `INGEST_UNAVAILABLE`).
+에러: 401(키 불일치), 404(미등록 트래커), 422(온도 범위 -90~+60℃ 밖, 미래 recordedAt >5m, 과거 recordedAt >7d — 시계 리셋 디바이스의 epoch급 timestamp가 hypertable chunk를 날짜당 생성하는 것 방지, M6~), 503(kafka 모드에서 브로커 발행 실패 — 저장 보장 없이 202를 주지 않는다, `INGEST_UNAVAILABLE`).
 
 ---
 

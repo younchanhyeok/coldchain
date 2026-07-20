@@ -2,7 +2,8 @@ services:
   postgres:
     # M6 PR4: TimescaleDB로 전환(NFR-4). ha 이미지는 TimescaleDB + PostGIS를 함께 담아
     # "한 DB에 시계열 hypertable + 공간"을 그대로 유지한다. 데이터 디렉터리가 표준 postgres와
-    # 달라(/home/postgres/pgdata) 기존 볼륨은 재사용 불가 — 어차피 fresh로 간다(down -v).
+    # 달라(/home/postgres/pgdata) 볼륨 이름도 timescale_data로 바꿨다 — 구(postgis) 볼륨을
+    # 그대로 마운트하면 에러 없이 빈 DB로 initdb되는 무음 사고가 나므로 이름으로 구조적으로 차단.
     image: timescale/timescaledb-ha:pg16
     # timescaledb는 반드시 preload, pg_stat_statements는 부하테스트 top query 캡처용.
     # CREATE EXTENSION은 Flyway(V1 postgis, V11 timescaledb)가 하고, pg_stat_statements만
@@ -15,7 +16,7 @@ services:
     ports:
       - "${DB_PORT:-5432}:5432"
     volumes:
-      - postgres_data:/home/postgres/pgdata
+      - timescale_data:/home/postgres/pgdata
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-coldchain} -d ${DB_NAME:-coldchain}"]
       interval: 5s
@@ -59,4 +60,4 @@ services:
       retries: 12
 
 volumes:
-  postgres_data:
+  timescale_data:

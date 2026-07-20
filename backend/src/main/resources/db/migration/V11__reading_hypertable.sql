@@ -6,10 +6,14 @@
 
 CREATE EXTENSION IF NOT EXISTS timescaledb;
 
-ALTER TABLE reading DROP CONSTRAINT reading_pkey;
+-- IF EXISTS: 이 파일은 비트랜잭션(.conf 참조)이라 문장 사이에서 중단되면 부분 적용 상태가
+-- 남는다 — DROP이 이미 커밋된 뒤 재실행돼도 첫 문장이 막히지 않게 재실행 안전으로 만든다.
+ALTER TABLE reading DROP CONSTRAINT IF EXISTS reading_pkey;
 ALTER TABLE reading ADD CONSTRAINT reading_pkey PRIMARY KEY (id, recorded_at);
 
--- chunk 1일: 리딩 5s 주기 × 수천 트래커 기준 chunk당 수백만 행 수준 — 시계열 조회가
--- recorded_at 범위로 chunk 프루닝되는 단위. migrate_data는 기존 dev 데이터 이관용.
+-- chunk 1일: 로컬 개발·단시간 부하테스트(수십 분) 기준. 주의 — 5s 주기 지속 유입이면
+-- 1,000트래커=17M행/일, 5,000트래커=86M행/일로 chunk가 커진다(행+인덱스가 메모리 예산을
+-- 넘기면 insert 성능 저하). 장시간 sustained/대용량 시나리오에선 1~4시간으로 줄이는 것을
+-- 검토(set_chunk_time_interval은 새 chunk부터 적용). migrate_data는 기존 dev 데이터 이관용.
 SELECT create_hypertable('reading', 'recorded_at',
     chunk_time_interval => INTERVAL '1 day', migrate_data => true);
