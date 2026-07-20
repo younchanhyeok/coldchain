@@ -2,6 +2,7 @@ package com.coldchain.reading.controller;
 
 import com.coldchain.auth.TrackerOwnershipGuard;
 import com.coldchain.reading.dto.ReadingSeriesResponse;
+import com.coldchain.reading.service.ReadingInterval;
 import com.coldchain.reading.service.ReadingService;
 import java.time.Duration;
 import java.time.Instant;
@@ -32,12 +33,15 @@ public class ReadingQueryController {
             @PathVariable String trackerId,
             @RequestParam(required = false) Instant from,
             @RequestParam(required = false) Instant to,
-            @RequestParam(required = false) Integer limit) {
+            @RequestParam(required = false) Integer limit,
+            @RequestParam(required = false) String interval) {
         trackerOwnershipGuard.assertOwnedByCurrentShipper(trackerId);
         Instant effectiveTo = to != null ? to : Instant.now();
         Instant effectiveFrom = from != null ? from : effectiveTo.minus(DEFAULT_RANGE);
         int effectiveLimit = limit != null ? Math.min(limit, MAX_LIMIT) : DEFAULT_LIMIT;
+        // interval 없으면 원시, 1m/5m이면 다운샘플(미지원 값은 fromParam이 422)
+        ReadingInterval readingInterval = interval != null ? ReadingInterval.fromParam(interval) : null;
 
-        return readingService.query(trackerId, effectiveFrom, effectiveTo, effectiveLimit);
+        return readingService.query(trackerId, effectiveFrom, effectiveTo, effectiveLimit, readingInterval);
     }
 }

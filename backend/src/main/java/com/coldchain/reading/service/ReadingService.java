@@ -7,6 +7,7 @@ import com.coldchain.reading.dto.NewReading;
 import com.coldchain.reading.dto.ReadingPoint;
 import com.coldchain.reading.dto.ReadingSeriesResponse;
 import com.coldchain.reading.repository.ReadingBatchWriter;
+import com.coldchain.reading.repository.ReadingDownsampleRepository;
 import com.coldchain.reading.repository.ReadingRepository;
 import com.coldchain.tracker.repository.TrackerRepository;
 import java.math.BigDecimal;
@@ -23,12 +24,14 @@ public class ReadingService {
 
     private final ReadingRepository readingRepository;
     private final ReadingBatchWriter readingBatchWriter;
+    private final ReadingDownsampleRepository downsampleRepository;
     private final TrackerRepository trackerRepository;
 
     public ReadingService(ReadingRepository readingRepository, ReadingBatchWriter readingBatchWriter,
-            TrackerRepository trackerRepository) {
+            ReadingDownsampleRepository downsampleRepository, TrackerRepository trackerRepository) {
         this.readingRepository = readingRepository;
         this.readingBatchWriter = readingBatchWriter;
+        this.downsampleRepository = downsampleRepository;
         this.trackerRepository = trackerRepository;
     }
 
@@ -45,31 +48,39 @@ public class ReadingService {
         readingBatchWriter.insertAll(readings);
     }
 
-    public ReadingSeriesResponse query(String trackerId, Instant from, Instant to, int limit) {
+    /** interval=null이면 원시 리딩, 1m/5m이면 다운샘플 CAgg 조회(M6 PR5). */
+    public ReadingSeriesResponse query(String trackerId, Instant from, Instant to, int limit, ReadingInterval interval) {
         if (!trackerRepository.existsById(trackerId)) {
             throw new ResourceNotFoundException("트래커를 찾을 수 없습니다: " + trackerId);
         }
 
-        List<Reading> newestFirst = readingRepository.findByTrackerIdAndRecordedAtBetweenOrderByRecordedAtDesc(
-                trackerId, from, to, PageRequest.of(0, limit));
+        List<ReadingPoint> newestFirst = interval != null
+                ? downsampleRepository.query(interval, trackerId, from, to, limit)
+                : rawPoints(trackerId, from, to, limit);
 
-        List<ReadingPoint> chronological = new ArrayList<>(newestFirst.size());
-        for (Reading reading : newestFirst) {
-            chronological.add(toPoint(reading));
-        }
+        // 두 경로 모두 최신순으로 limit개를 받아 시간순으로 뒤집는다 — nextBefore 페이지네이션 의미 동일.
+        List<ReadingPoint> chronological = new ArrayList<>(newestFirst);
         Collections.reverse(chronological);
 
         Instant nextBefore = newestFirst.size() == limit
-                ? newestFirst.get(newestFirst.size() - 1).getRecordedAt()
+                ? newestFirst.get(newestFirst.size() - 1).ts()
                 : null;
 
         return new ReadingSeriesResponse(trackerId, chronological, nextBefore);
+    }
+
+    private List<ReadingPoint> rawPoints(String trackerId, Instant from, Instant to, int limit) {
+        return readingRepository.findByTrackerIdAndRecordedAtBetweenOrderByRecordedAtDesc(
+                        trackerId, from, to, PageRequest.of(0, limit))
+                .stream()
+                .map(ReadingService::toPoint)
+                .toList();
     }
 
     private static ReadingPoint toPoint(Reading reading) {
         Point position = reading.getPosition();
         Double lat = position != null ? GeoPoints.lat(position) : null;
         Double lon = position != null ? GeoPoints.lon(position) : null;
-        return new ReadingPoint(reading.getRecordedAt(), reading.getTemperature().doubleValue(), lat, lon);
+        return ReadingPoint.raw(reading.getRecordedAt(), reading.getTemperature().doubleValue(), lat, lon);
     }
 }

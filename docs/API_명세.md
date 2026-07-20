@@ -166,15 +166,17 @@
 목록 항목 + `shipment` 요약(출발/도착지 좌표, 수령기관명, **기사 연락처 driverContact**(M3), 상태) + `activeAnomalies[]`. 기사는 이름 필드가 없어 연락처로만 표시한다.
 
 ### GET /api/v1/trackers/{trackerId}/readings — 온도 시계열 (차트)
-쿼리: `from`/`to`(기본 최근 6h), `limit`, `interval`(선택 — `1m`/`5m` 다운샘플, M6 Timescale 이후).
+쿼리: `from`/`to`(기본 최근 6h), `limit`, `interval`(선택 — `1m`/`5m` 다운샘플, 미지원 값은 422).
 ```json
-// 200
+// 200 (원시 — interval 없음)
 {
   "trackerId": "TRK-0001",
-  "readings": [ { "ts": "2026-07-05T03:12:40Z", "temperature": 5.8, "lat": 37.4979, "lon": 127.0276 } ],
+  "readings": [ { "ts": "2026-07-05T03:12:40Z", "temperature": 5.8, "minTemperature": null, "maxTemperature": null, "lat": 37.4979, "lon": 127.0276 } ],
   "nextBefore": "2026-07-05T01:00:00Z"
 }
 ```
+- `interval=1m|5m`(M6~): continuous aggregate 다운샘플. `ts`는 버킷 시작, `temperature`는 버킷 평균, `minTemperature`/`maxTemperature`는 버킷 내 최저/최고(원시 조회에선 `null`). 콜드체인에선 평균이 짧은 이탈을 가리므로 `maxTemperature`가 안전 신호다. `lat`/`lon`은 버킷 내 마지막 위치. 실시간 집계라 아직 굳지 않은 최신 버킷도 즉석 계산돼 포함된다.
+- 보존 정책(M6~): 원시 7일 / 1분 집계 30일 / 5분 집계 180일. 7일 넘은 구간은 원시 조회가 비고 `interval` 다운샘플로만 조회된다.
 
 ### GET /api/v1/trackers/{trackerId}/anomalies — 이상 이벤트 (FR-4)
 쿼리: `from`/`to`(기본 최근 6h), `type`.
