@@ -46,6 +46,10 @@ public class IngestController {
     private static final BigDecimal MIN_TEMPERATURE = new BigDecimal("-90");
     private static final BigDecimal MAX_TEMPERATURE = new BigDecimal("60");
     private static final Duration MAX_FUTURE_SKEW = Duration.ofMinutes(5);
+    // 과거 하한(M6 PR4): recorded_at이 hypertable 파티션 컬럼이 되면서 시계 리셋된 디바이스가
+    // epoch급 timestamp를 보내면 날짜당 chunk가 물리 생성된다(카탈로그 비대·락). 디바이스가
+    // 오프라인 버퍼링 후 몰아 보내는 정상 케이스(배치 API)는 며칠 안쪽이므로 7일이면 넉넉하다.
+    private static final Duration MAX_PAST_SKEW = Duration.ofDays(7);
     // 디바이스 버퍼 플러시 상정 상한 — 폭주 방지. 초과는 배열 자체를 422로 거절.
     private static final int MAX_BATCH_SIZE = 500;
 
@@ -157,6 +161,10 @@ public class IngestController {
         if (request.recordedAt().isAfter(Instant.now().plus(MAX_FUTURE_SKEW))) {
             throw new SemanticInvalidException(
                     "recordedAt이 미래 5분을 초과할 수 없습니다: " + request.recordedAt());
+        }
+        if (request.recordedAt().isBefore(Instant.now().minus(MAX_PAST_SKEW))) {
+            throw new SemanticInvalidException(
+                    "recordedAt이 과거 7일을 초과할 수 없습니다: " + request.recordedAt());
         }
     }
 }

@@ -5,7 +5,8 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.coldchain.TestcontainersConfiguration;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.reading.domain.Reading;
-import com.coldchain.reading.repository.ReadingRepository;
+import com.coldchain.reading.dto.NewReading;
+import com.coldchain.reading.repository.ReadingBatchWriter;
 import com.coldchain.shipment.domain.Shipment;
 import com.coldchain.shipment.domain.ShipmentStatus;
 import com.coldchain.shipment.repository.ShipmentRepository;
@@ -38,10 +39,19 @@ class TrackServiceTest {
     private ShipmentRepository shipmentRepository;
 
     @Autowired
-    private ReadingRepository readingRepository;
+    private ReadingBatchWriter readingBatchWriter;
 
     @Autowired
     private TrackerLatestRepository trackerLatestRepository;
+
+    // Reading은 hypertable 전환 후 읽기 전용(복합키) — 테스트 데이터도 실제 쓰기 경로인
+    // ReadingBatchWriter(JDBC)로 넣는다. 기존 readingRepository.saveAll(JPA)을 대체.
+    private void persistReadings(List<Reading> readings) {
+        readingBatchWriter.insertAll(readings.stream()
+                .map(r -> new NewReading(r.getTrackerId(), r.getRecordedAt(), r.getTemperature(),
+                        GeoPoints.lat(r.getPosition()), GeoPoints.lon(r.getPosition())))
+                .toList());
+    }
 
     private Shipment givenTrackerWithActiveShipment(String trackerId) {
         trackerRepository.save(new Tracker(trackerId, 1L, "백신 A", new BigDecimal("8.0"), "hash"));
@@ -71,7 +81,7 @@ class TrackServiceTest {
             readings.add(new Reading(trackerId, base.plusSeconds(i), new BigDecimal("5.0"),
                     GeoPoints.of(37.42 + i * 0.0001, 127.12)));
         }
-        readingRepository.saveAll(readings);
+        persistReadings(readings);
 
         TrackResponse track = trackService.getTrack(trackerId);
 
@@ -89,7 +99,7 @@ class TrackServiceTest {
         Instant base = shipment.getCreatedAt().plusSeconds(1);
 
         // 정상 → 초과(구간1 시작) → 초과(구간1 지속) → 정상 → 초과(구간2)
-        readingRepository.saveAll(List.of(
+        persistReadings(List.of(
                 new Reading(trackerId, base, new BigDecimal("5.0"), GeoPoints.of(37.420, 127.12)),
                 new Reading(trackerId, base.plusSeconds(1), new BigDecimal("9.0"), GeoPoints.of(37.421, 127.12)),
                 new Reading(trackerId, base.plusSeconds(2), new BigDecimal("9.5"), GeoPoints.of(37.422, 127.12)),
@@ -117,7 +127,7 @@ class TrackServiceTest {
             readings.add(new Reading(trackerId, base.plusSeconds(i * 60L), new BigDecimal("5.0"),
                     GeoPoints.of(37.42 + i * 0.0001, 127.12)));
         }
-        readingRepository.saveAll(readings);
+        persistReadings(readings);
 
         TrackerLatest latest = new TrackerLatest(trackerId);
         latest.applyReading(base.plusSeconds(240), new BigDecimal("5.0"), GeoPoints.of(37.4204, 127.12));
@@ -141,7 +151,7 @@ class TrackServiceTest {
             readings.add(new Reading(trackerId, base.plusSeconds(i * 60L), new BigDecimal("5.0"),
                     GeoPoints.of(37.42, 127.12)));
         }
-        readingRepository.saveAll(readings);
+        persistReadings(readings);
 
         TrackerLatest latest = new TrackerLatest(trackerId);
         latest.applyReading(base.plusSeconds(240), new BigDecimal("5.0"), GeoPoints.of(37.42, 127.12));

@@ -18,11 +18,13 @@ import org.testcontainers.utility.DockerImageName;
 @TestConfiguration(proxyBeanMethods = false)
 public class KafkaTestcontainersConfiguration {
 
+	// timescaledb preload는 ha 이미지 initdb 스크립트가 보장 — withCommand 금지(fsync=off 소실).
+	// 상세는 TestcontainersConfiguration의 동일 빈 주석 참조.
 	@Bean
 	@ServiceConnection
 	public PostgreSQLContainer<?> postgresContainer() {
 		return new PostgreSQLContainer<>(
-				DockerImageName.parse("postgis/postgis:16-3.4").asCompatibleSubstituteFor("postgres"));
+				DockerImageName.parse("timescale/timescaledb-ha:pg16").asCompatibleSubstituteFor("postgres"));
 	}
 
 	@Bean
