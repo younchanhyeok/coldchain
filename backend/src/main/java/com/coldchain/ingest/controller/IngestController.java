@@ -49,6 +49,8 @@ public class IngestController {
     // 과거 하한(M6 PR4): recorded_at이 hypertable 파티션 컬럼이 되면서 시계 리셋된 디바이스가
     // epoch급 timestamp를 보내면 날짜당 chunk가 물리 생성된다(카탈로그 비대·락). 디바이스가
     // 오프라인 버퍼링 후 몰아 보내는 정상 케이스(배치 API)는 며칠 안쪽이므로 7일이면 넉넉하다.
+    // ★ 이 값을 늘리면 V12 다운샘플 CAgg의 refresh start_offset(7일)도 함께 늘려야 한다 —
+    //   허용 지연보다 refresh 윈도우가 짧으면 늦게 온 이탈이 다운샘플에서 묻힌다(V12 주석 참조).
     private static final Duration MAX_PAST_SKEW = Duration.ofDays(7);
     // 디바이스 버퍼 플러시 상정 상한 — 폭주 방지. 초과는 배열 자체를 422로 거절.
     private static final int MAX_BATCH_SIZE = 500;
