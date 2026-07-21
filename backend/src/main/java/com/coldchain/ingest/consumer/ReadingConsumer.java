@@ -92,7 +92,7 @@ public class ReadingConsumer {
         // ① 원시 배치 insert
         readingService.saveBatch(known.stream()
                 .map(m -> new NewReading(m.trackerId(), m.recordedAt(),
-                        BigDecimal.valueOf(m.temperature()), m.lat(), m.lon()))
+                        BigDecimal.valueOf(m.temperature()), m.lat(), m.lon(), m.ambientTemp()))
                 .toList());
 
         // ② 트래커별 최신 1건 collapse → upsert → 발행

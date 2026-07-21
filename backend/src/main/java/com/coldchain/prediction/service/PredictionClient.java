@@ -40,14 +40,19 @@ public class PredictionClient {
         this.baseUrl = baseUrl;
     }
 
-    public record WindowPoint(Instant ts, BigDecimal temperature) {
+    public record WindowPoint(Instant ts, BigDecimal temperature, BigDecimal ambientTemp) {
+    }
+
+    /** v2 다변량 컨텍스트 — M4에서 계약에 예약, M7에서 실제 값 주입. 둘 다 nullable(폴백 = v1). */
+    public record Context(BigDecimal ambientTemp, Double remainingDistanceMeters) {
     }
 
     public record Result(boolean willBreach, Instant predictedBreachAt, BigDecimal slopePerMinute, String modelVersion) {
     }
 
     /** 예측 서버 장애·쿨다운 중이면 빈 Optional — 호출부는 이번 리딩을 조용히 스킵한다. */
-    public Optional<Result> predict(String trackerId, BigDecimal thresholdTemp, List<WindowPoint> window) {
+    public Optional<Result> predict(String trackerId, BigDecimal thresholdTemp, List<WindowPoint> window,
+            Context context) {
         if (Instant.now().isBefore(circuitOpenUntil)) {
             return Optional.empty();
         }
@@ -57,7 +62,7 @@ public class PredictionClient {
                 PredictApiResponse body = restClient.post()
                         .uri(baseUrl + "/internal/v1/predict")
                         .contentType(MediaType.APPLICATION_JSON)
-                        .body(new PredictApiRequest(trackerId, thresholdTemp, toApiWindow(window), null))
+                        .body(new PredictApiRequest(trackerId, thresholdTemp, toApiWindow(window), toContextBody(context)))
                         .retrieve()
                         .body(PredictApiResponse.class);
                 circuitOpenUntil = Instant.EPOCH; // 성공 시 서킷 리셋
@@ -75,12 +80,24 @@ public class PredictionClient {
     }
 
     private List<PredictApiRequest.WindowPointBody> toApiWindow(List<WindowPoint> window) {
-        return window.stream().map(w -> new PredictApiRequest.WindowPointBody(w.ts(), w.temperature())).toList();
+        return window.stream()
+                .map(w -> new PredictApiRequest.WindowPointBody(w.ts(), w.temperature(), w.ambientTemp()))
+                .toList();
+    }
+
+    private PredictApiRequest.ContextBody toContextBody(Context context) {
+        if (context == null) {
+            return null;
+        }
+        return new PredictApiRequest.ContextBody(context.ambientTemp(), context.remainingDistanceMeters());
     }
 
     private record PredictApiRequest(
-            String trackerId, BigDecimal thresholdTemp, List<WindowPointBody> window, Object context) {
-        private record WindowPointBody(Instant ts, BigDecimal temperature) {
+            String trackerId, BigDecimal thresholdTemp, List<WindowPointBody> window, ContextBody context) {
+        private record WindowPointBody(Instant ts, BigDecimal temperature, BigDecimal ambientTemp) {
+        }
+
+        private record ContextBody(BigDecimal ambientTemp, Double remainingDistanceMeters) {
         }
     }
 

@@ -83,7 +83,7 @@ class TrackerClient:
             "PATCH", f"/api/v1/shipments/{shipment_id}", {"status": status})
 
     async def send_reading(self, tracker_id: str, device_key: str, temperature: float, lat: float, lon: float,
-                           recorded_at: str, seq: int) -> int:
+                           recorded_at: str, seq: int, ambient_temp: float | None = None) -> int:
         """상태코드를 반환하고 4xx/5xx에도 raise하지 않는다 — 부하 중 에러 응답도 측정 대상이다.
         디바이스 키 경로는 M5 이전과 동일 — permitAll, JWT 불필요."""
         async with self._session.post(
@@ -94,6 +94,7 @@ class TrackerClient:
                     "lon": lon,
                     "recordedAt": recorded_at,
                     "seq": seq,
+                    "ambientTemp": ambient_temp,
                 },
                 headers={"X-Device-Key": device_key}) as resp:
             await resp.read()

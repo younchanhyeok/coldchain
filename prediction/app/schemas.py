@@ -6,6 +6,8 @@ from pydantic import BaseModel
 class WindowPoint(BaseModel):
     ts: datetime
     temperature: float
+    # per-point 외기온(M7 v2용) — nullable. v1은 무시, v2-newton이 regime 판정에 사용.
+    ambientTemp: float | None = None
 
 
 class PredictContext(BaseModel):

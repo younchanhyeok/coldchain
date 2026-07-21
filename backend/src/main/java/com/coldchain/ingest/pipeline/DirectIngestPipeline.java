@@ -42,7 +42,7 @@ public class DirectIngestPipeline implements IngestPipeline {
         BigDecimal temperature = BigDecimal.valueOf(request.temperature());
         Point position = GeoPoints.of(request.lat(), request.lon());
 
-        readingService.save(tracker.getId(), request.recordedAt(), temperature, position);
+        readingService.save(tracker.getId(), request.recordedAt(), temperature, position, request.ambientTemp());
         upsertLatestAndPublish(tracker, request.recordedAt(), temperature, position);
     }
 
@@ -50,7 +50,7 @@ public class DirectIngestPipeline implements IngestPipeline {
     public void ingestBatch(Tracker tracker, List<ReadingIngestRequest> readings) {
         readingService.saveBatch(readings.stream()
                 .map(r -> new NewReading(tracker.getId(), r.recordedAt(), BigDecimal.valueOf(r.temperature()),
-                        r.lat(), r.lon()))
+                        r.lat(), r.lon(), r.ambientTemp()))
                 .toList());
 
         // 최신상태 upsert는 배열 중 최신 recordedAt 1건으로 collapse — Kafka 컨슈머와 같은 규칙.

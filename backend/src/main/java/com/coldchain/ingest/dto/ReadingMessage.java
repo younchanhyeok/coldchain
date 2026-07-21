@@ -13,5 +13,6 @@ public record ReadingMessage(
         Double lat,
         Double lon,
         Instant recordedAt,
-        Long seq) {
+        Long seq,
+        Double ambientTemp) {
 }

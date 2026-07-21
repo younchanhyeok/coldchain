@@ -38,6 +38,6 @@ public class KafkaIngestPipeline implements IngestPipeline {
 
     private static ReadingMessage toMessage(String trackerId, ReadingIngestRequest request) {
         return new ReadingMessage(trackerId, request.temperature(), request.lat(), request.lon(),
-                request.recordedAt(), request.seq());
+                request.recordedAt(), request.seq(), request.ambientTemp());
     }
 }

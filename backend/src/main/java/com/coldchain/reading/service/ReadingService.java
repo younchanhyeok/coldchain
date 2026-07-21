@@ -38,10 +38,10 @@ public class ReadingService {
 
     /** 단건 저장도 배치 writer 경로로 통일(M6 PR3) — ON CONFLICT 멱등성(재시도·재전달 흡수)을
      *  단건/배치/컨슈머가 같은 SQL로 공유한다. JPA save는 유니크 충돌 시 예외라 재시도에 취약. */
-    public void save(String trackerId, Instant recordedAt, BigDecimal temperature, Point position) {
+    public void save(String trackerId, Instant recordedAt, BigDecimal temperature, Point position, Double ambientTemp) {
         Double lat = position != null ? GeoPoints.lat(position) : null;
         Double lon = position != null ? GeoPoints.lon(position) : null;
-        readingBatchWriter.insertAll(List.of(new NewReading(trackerId, recordedAt, temperature, lat, lon)));
+        readingBatchWriter.insertAll(List.of(new NewReading(trackerId, recordedAt, temperature, lat, lon, ambientTemp)));
     }
 
     /** 배치 수집(M6) — JDBC 문장 배칭 한 방으로 insert. 단건 save 루프와 달리 왕복이 1회다. */

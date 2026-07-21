@@ -86,7 +86,7 @@ class PredictionControllerTest {
         String deviceKey = registerTracker(trackerId, 20.0);
 
         Instant breachAt = Instant.now().plusSeconds(600);
-        when(predictionClient.predict(anyString(), any(), any()))
+        when(predictionClient.predict(anyString(), any(), any(), any()))
                 .thenReturn(Optional.of(new PredictionClient.Result(true, breachAt, BigDecimal.valueOf(0.5), "v1-linear")));
 
         Instant base = Instant.now();
