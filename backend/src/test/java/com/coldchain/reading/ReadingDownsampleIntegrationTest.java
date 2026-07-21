@@ -111,6 +111,37 @@ class ReadingDownsampleIntegrationTest {
     }
 
     @Test
+    void nextBeforeCursorPaginatesWithoutBoundaryDuplication() throws Exception {
+        // PR5 후속: 원시 경로도 [from, to) 반개구간으로 통일 — to=nextBefore 재조회 시
+        // 경계 리딩(ts==nextBefore)이 두 페이지에 중복 등장하지 않는다.
+        TrackerRegisterResponse tracker = registerTracker("TRK-DS-PG");
+        Instant base = Instant.now().minus(5, ChronoUnit.MINUTES);
+        for (int i = 0; i < 3; i++) {
+            postReading(tracker, 5.0 + i, base.plusSeconds(i * 10L));
+        }
+
+        // limit=2 → 최신 2건(i=2, i=1) + nextBefore = i=1의 ts
+        String firstPage = mockMvc.perform(get("/api/v1/trackers/{id}/readings", tracker.trackerId())
+                        .param("from", base.minusSeconds(1).toString())
+                        .param("to", base.plusSeconds(60).toString())
+                        .param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readings.length()").value(2))
+                .andExpect(jsonPath("$.nextBefore").isNotEmpty())
+                .andReturn().getResponse().getContentAsString();
+        String nextBefore = objectMapper.readTree(firstPage).get("nextBefore").asText();
+
+        // 다음 페이지: to=nextBefore(배타) → 경계(i=1) 중복 없이 i=0만
+        mockMvc.perform(get("/api/v1/trackers/{id}/readings", tracker.trackerId())
+                        .param("from", base.minusSeconds(1).toString())
+                        .param("to", nextBefore)
+                        .param("limit", "2"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.readings.length()").value(1))
+                .andExpect(jsonPath("$.readings[0].temperature").value(5.0));
+    }
+
+    @Test
     void refreshPolicyWindowCoversAcceptedIngestLateness() {
         // 회귀 방지(코드리뷰에서 실측한 버그): refresh start_offset이 수집 허용 지연
         // (IngestController.MAX_PAST_SKEW=7일)보다 짧으면, 그보다 늦게 도착한 리딩이 이미

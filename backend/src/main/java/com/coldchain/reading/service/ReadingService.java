@@ -3,6 +3,7 @@ package com.coldchain.reading.service;
 import com.coldchain.common.GeoPoints;
 import com.coldchain.common.error.ResourceNotFoundException;
 import com.coldchain.reading.domain.Reading;
+import com.coldchain.reading.domain.ReadingInterval;
 import com.coldchain.reading.dto.NewReading;
 import com.coldchain.reading.dto.ReadingPoint;
 import com.coldchain.reading.dto.ReadingSeriesResponse;
@@ -58,9 +59,9 @@ public class ReadingService {
                 ? downsampleRepository.query(interval, trackerId, from, to, limit)
                 : rawPoints(trackerId, from, to, limit);
 
-        // 두 경로 모두 최신순 limit개를 받아 시간순으로 뒤집고, limit을 꽉 채웠으면 가장 오래된
-        // 항목의 ts를 nextBefore 커서로 준다(다운샘플 경로 to는 배타적, 원시 경로 to는 포함적이라
-        // 원시 재조회 시 경계 1건이 겹칠 수 있음 — 원시는 이 PR 이전부터의 동작).
+        // 두 경로 모두 [from, to) 반개구간에서 최신순 limit개를 받아 시간순으로 뒤집고, limit을
+        // 꽉 채웠으면 가장 오래된 항목의 ts를 nextBefore 커서로 준다 — to=nextBefore로 다음
+        // 페이지를 요청하면 경계 중복 없이 이어진다(원시/다운샘플 동일 의미).
         List<ReadingPoint> chronological = new ArrayList<>(newestFirst);
         Collections.reverse(chronological);
 
@@ -72,7 +73,7 @@ public class ReadingService {
     }
 
     private List<ReadingPoint> rawPoints(String trackerId, Instant from, Instant to, int limit) {
-        return readingRepository.findByTrackerIdAndRecordedAtBetweenOrderByRecordedAtDesc(
+        return readingRepository.findByTrackerIdAndRecordedAtGreaterThanEqualAndRecordedAtLessThanOrderByRecordedAtDesc(
                         trackerId, from, to, PageRequest.of(0, limit))
                 .stream()
                 .map(ReadingService::toPoint)

@@ -1,7 +1,7 @@
 package com.coldchain.reading.repository;
 
 import com.coldchain.reading.dto.ReadingPoint;
-import com.coldchain.reading.service.ReadingInterval;
+import com.coldchain.reading.domain.ReadingInterval;
 import java.sql.Timestamp;
 import java.time.Instant;
 import java.util.List;

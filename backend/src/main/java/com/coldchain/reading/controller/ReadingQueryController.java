@@ -2,7 +2,7 @@ package com.coldchain.reading.controller;
 
 import com.coldchain.auth.TrackerOwnershipGuard;
 import com.coldchain.reading.dto.ReadingSeriesResponse;
-import com.coldchain.reading.service.ReadingInterval;
+import com.coldchain.reading.domain.ReadingInterval;
 import com.coldchain.reading.service.ReadingService;
 import java.time.Duration;
 import java.time.Instant;

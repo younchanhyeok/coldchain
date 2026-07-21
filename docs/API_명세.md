@@ -166,7 +166,7 @@
 목록 항목 + `shipment` 요약(출발/도착지 좌표, 수령기관명, **기사 연락처 driverContact**(M3), 상태) + `activeAnomalies[]`. 기사는 이름 필드가 없어 연락처로만 표시한다.
 
 ### GET /api/v1/trackers/{trackerId}/readings — 온도 시계열 (차트)
-쿼리: `from`/`to`(기본 최근 6h), `limit`, `interval`(선택 — `1m`/`5m` 다운샘플, 미지원 값은 422).
+쿼리: `from`/`to`(기본 최근 6h, **반개구간 `[from, to)`** — 원시·다운샘플 동일), `limit`, `interval`(선택 — `1m`/`5m` 다운샘플, 미지원 값은 422). `limit`을 꽉 채우면 `nextBefore`(가장 오래된 항목 ts)가 오고, `to=nextBefore`로 다음 페이지를 요청하면 경계 중복 없이 이어진다.
 ```json
 // 200 (원시 — interval 없음)
 {
