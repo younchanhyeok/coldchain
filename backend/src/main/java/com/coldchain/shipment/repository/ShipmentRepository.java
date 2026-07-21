@@ -31,12 +31,14 @@ public interface ShipmentRepository extends JpaRepository<Shipment, Long> {
     // 보장)이라 이 카운트가 곧 "활성 트래커 수"다.
     long countByStatusNot(ShipmentStatus status);
 
-    // M7: 현재 위치(lat/lon)에서 활성 배송 목적지까지 남은 거리(m) — v2 예측 context.
-    // 활성 배송 없거나 목적지 좌표 없으면 null. ST_DistanceSphere는 구면 근사(WGS84, 지표 거리).
+    // M7: 현재 위치(lat/lon)에서 운송 중 배송 목적지까지 남은 거리(m) — v2 예측 context.
+    // IN_TRANSIT만 대상 — 미출발(READY) 배송은 "남은 거리"가 의미 없고, ConsigneeTrack의
+    // ETA/잔여거리도 IN_TRANSIT에만 부여하는 것과 정합(코드리뷰 반영). 운송 중 배송·목적지
+    // 좌표 없으면 null. ST_DistanceSphere는 구면 근사(WGS84, 지표 거리).
     @Query(value = """
             SELECT ST_DistanceSphere(s.destination_position, ST_SetSRID(ST_MakePoint(:lon, :lat), 4326))
               FROM shipment s
-             WHERE s.tracker_id = :trackerId AND s.status <> 'DELIVERED'
+             WHERE s.tracker_id = :trackerId AND s.status = 'IN_TRANSIT'
                AND s.destination_position IS NOT NULL
              LIMIT 1
             """, nativeQuery = true)
