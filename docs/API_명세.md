@@ -176,7 +176,7 @@
 }
 ```
 - `interval=1m|5m`(M6~): continuous aggregate 다운샘플. `ts`는 버킷 시작, `temperature`는 버킷 평균, `minTemperature`/`maxTemperature`는 버킷 내 최저/최고(원시 조회에선 `null`). 콜드체인에선 평균이 짧은 이탈을 가리므로 `maxTemperature`가 안전 신호다. `lat`/`lon`은 버킷 내 마지막 위치. 실시간 집계라 아직 굳지 않은 최신 버킷도 즉석 계산돼 포함된다.
-- 보존 정책(M6~): 원시 7일 / 1분 집계 30일 / 5분 집계 180일. 7일 넘은 구간은 원시 조회가 비고 `interval` 다운샘플로만 조회된다.
+- 보존 정책(M6~): 원시 8일 / 1분 집계 30일 / 5분 집계 180일. 8일 넘은 구간은 원시 조회가 비고 `interval` 다운샘플로만 조회된다.
 
 ### GET /api/v1/trackers/{trackerId}/anomalies — 이상 이벤트 (FR-4)
 쿼리: `from`/`to`(기본 최근 6h), `type`.

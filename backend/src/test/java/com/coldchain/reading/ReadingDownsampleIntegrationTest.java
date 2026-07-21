@@ -1,5 +1,6 @@
 package com.coldchain.reading;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.nullValue;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
@@ -12,6 +13,7 @@ import com.coldchain.tracker.dto.TrackerRegisterResponse;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -106,6 +108,21 @@ class ReadingDownsampleIntegrationTest {
                 .andExpect(jsonPath("$.readings[0].temperature").value(5.8))
                 .andExpect(jsonPath("$.readings[0].minTemperature").value(nullValue()))
                 .andExpect(jsonPath("$.readings[0].maxTemperature").value(nullValue()));
+    }
+
+    @Test
+    void refreshPolicyWindowCoversAcceptedIngestLateness() {
+        // 회귀 방지(코드리뷰에서 실측한 버그): refresh start_offset이 수집 허용 지연
+        // (IngestController.MAX_PAST_SKEW=7일)보다 짧으면, 그보다 늦게 도착한 리딩이 이미
+        // materialize된 과거 버킷을 갱신해도 스케줄 refresh가 안 닿아 다운샘플에서 이탈(max)이
+        // 묻힌다. 두 CAgg 정책의 start_offset이 7일 이상임을 잠근다.
+        List<String> startOffsets = jdbcTemplate.queryForList(
+                "SELECT config->>'start_offset' FROM timescaledb_information.jobs "
+                        + "WHERE proc_name = 'policy_refresh_continuous_aggregate'",
+                String.class);
+
+        assertThat(startOffsets).hasSize(2);
+        assertThat(startOffsets).allSatisfy(offset -> assertThat(offset).contains("7 days"));
     }
 
     @Test

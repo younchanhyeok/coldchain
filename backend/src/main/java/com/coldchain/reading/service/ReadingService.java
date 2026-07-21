@@ -58,7 +58,9 @@ public class ReadingService {
                 ? downsampleRepository.query(interval, trackerId, from, to, limit)
                 : rawPoints(trackerId, from, to, limit);
 
-        // 두 경로 모두 최신순으로 limit개를 받아 시간순으로 뒤집는다 — nextBefore 페이지네이션 의미 동일.
+        // 두 경로 모두 최신순 limit개를 받아 시간순으로 뒤집고, limit을 꽉 채웠으면 가장 오래된
+        // 항목의 ts를 nextBefore 커서로 준다(다운샘플 경로 to는 배타적, 원시 경로 to는 포함적이라
+        // 원시 재조회 시 경계 1건이 겹칠 수 있음 — 원시는 이 PR 이전부터의 동작).
         List<ReadingPoint> chronological = new ArrayList<>(newestFirst);
         Collections.reverse(chronological);
 
