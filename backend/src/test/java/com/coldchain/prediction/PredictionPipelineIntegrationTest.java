@@ -96,6 +96,41 @@ class PredictionPipelineIntegrationTest {
         }
     }
 
+    private void sendReadingWithAmbient(String trackerId, String deviceKey, double temperature, double ambient,
+            Instant recordedAt) throws Exception {
+        mockMvc.perform(post("/api/v1/trackers/{id}/readings", trackerId)
+                        .header("X-Device-Key", deviceKey)
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content("""
+                                {"temperature": %s, "lat": 37.42, "lon": 127.12, "recordedAt": "%s", "ambientTemp": %s}
+                                """.formatted(temperature, recordedAt, ambient)))
+                .andExpect(status().isAccepted());
+        Thread.sleep(150);
+    }
+
+    @Test
+    void contextAndWindowCarryAmbientFromReadings() throws Exception {
+        // M7 PR1 배선 검증: 리딩에 실린 ambientTemp가 예측 호출의 context·window까지 흐른다.
+        String trackerId = "TRK-PRED-AMBIENT";
+        String deviceKey = registerTracker(trackerId, 20.0);
+        when(predictionClient.predict(anyString(), any(), any(), any())).thenReturn(Optional.empty());
+
+        Instant base = Instant.now();
+        for (int i = 0; i < 5; i++) {
+            sendReadingWithAmbient(trackerId, deviceKey, 5.0, 22.0, base.plusSeconds(i * 10L));
+        }
+
+        var windowCaptor = org.mockito.ArgumentCaptor.forClass(java.util.List.class);
+        var contextCaptor = org.mockito.ArgumentCaptor.forClass(PredictionClient.Context.class);
+        await().atMost(Duration.ofSeconds(10)).untilAsserted(() ->
+                org.mockito.Mockito.verify(predictionClient, org.mockito.Mockito.atLeastOnce())
+                        .predict(anyString(), any(), windowCaptor.capture(), contextCaptor.capture()));
+
+        assertThat(contextCaptor.getValue().ambientTemp()).isEqualByComparingTo("22.00");
+        assertThat(windowCaptor.getValue()).allSatisfy(p ->
+                assertThat(((PredictionClient.WindowPoint) p).ambientTemp()).isEqualByComparingTo("22.00"));
+    }
+
     private Optional<Prediction> findActive(String trackerId) {
         return predictionRepository.findByTrackerIdAndStatus(trackerId, PredictionStatus.ACTIVE);
     }
@@ -112,7 +147,7 @@ class PredictionPipelineIntegrationTest {
         String deviceKey = registerTracker(trackerId, 20.0); // 임계를 높게 잡아 실제 이탈은 안 나게
 
         Instant breachAt = Instant.now().plusSeconds(600);
-        when(predictionClient.predict(anyString(), any(), any()))
+        when(predictionClient.predict(anyString(), any(), any(), any()))
                 .thenReturn(Optional.of(new PredictionClient.Result(true, breachAt, BigDecimal.valueOf(0.5), "v1-linear")));
         when(slackAlertSender.send(anyString())).thenReturn(SlackAlertSender.SendResult.success(1));
 
@@ -135,7 +170,7 @@ class PredictionPipelineIntegrationTest {
 
         Instant breachAt = Instant.now().plusSeconds(600);
         // 처음엔 이탈 예상 → ACTIVE, 이후 계속 false → 연속 3회여야 취소(히스테리시스)
-        when(predictionClient.predict(anyString(), any(), any()))
+        when(predictionClient.predict(anyString(), any(), any(), any()))
                 .thenReturn(Optional.of(new PredictionClient.Result(true, breachAt, BigDecimal.valueOf(0.5), "v1-linear")))
                 .thenReturn(Optional.of(new PredictionClient.Result(false, null, BigDecimal.ZERO, "v1-linear")));
         when(slackAlertSender.send(anyString())).thenReturn(SlackAlertSender.SendResult.success(1));
@@ -163,7 +198,7 @@ class PredictionPipelineIntegrationTest {
         String deviceKey = registerTracker(trackerId, 20.0); // 급변 스파이크(15도)에도 실제 이탈은 안 나게
 
         Instant breachAt = Instant.now().plusSeconds(600);
-        when(predictionClient.predict(anyString(), any(), any()))
+        when(predictionClient.predict(anyString(), any(), any(), any()))
                 .thenReturn(Optional.of(new PredictionClient.Result(true, breachAt, BigDecimal.valueOf(0.5), "v1-linear")));
         when(slackAlertSender.send(anyString())).thenReturn(SlackAlertSender.SendResult.success(1));
 
@@ -187,7 +222,7 @@ class PredictionPipelineIntegrationTest {
         String deviceKey = registerTracker(trackerId, 8.0);
 
         Instant breachAt = Instant.now().plusSeconds(600);
-        when(predictionClient.predict(anyString(), any(), any()))
+        when(predictionClient.predict(anyString(), any(), any(), any()))
                 .thenReturn(Optional.of(new PredictionClient.Result(true, breachAt, BigDecimal.valueOf(0.5), "v1-linear")));
         when(slackAlertSender.send(anyString())).thenReturn(SlackAlertSender.SendResult.success(1));
 
@@ -216,7 +251,7 @@ class PredictionPipelineIntegrationTest {
         String deviceKey = registerTracker(trackerId, 20.0);
 
         // 예측 서버 장애·쿨다운을 흉내— PredictionClient가 항상 빈 Optional을 반환.
-        when(predictionClient.predict(anyString(), any(), any())).thenReturn(Optional.empty());
+        when(predictionClient.predict(anyString(), any(), any(), any())).thenReturn(Optional.empty());
 
         // sendReading 자체가 202를 기대하므로(NFR-3: 수집은 무중단), 이 호출들이 전부 통과하는
         // 것 자체가 이미 무중단 증거다 — 추가로 예측만 생성되지 않았는지 확인한다.

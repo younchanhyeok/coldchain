@@ -8,5 +8,6 @@ public record ReadingIngestRequest(
         @NotNull Double lat,
         @NotNull Double lon,
         @NotNull Instant recordedAt,
-        Long seq) {
+        Long seq,
+        Double ambientTemp) {
 }

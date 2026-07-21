@@ -79,6 +79,8 @@ async def tracker_loop(client: TrackerClient, t: dict, waypoints, interval: floa
     while not t["delivered"]:
         elapsed = time.monotonic() - t["startTime"]
         temperature = t["profile"].step(elapsed, interval)
+        # 외기 센서값(M7) — 곡선을 만든 그 ambient를 함께 전송해 v2 다변량 예측의 입력이 되게 한다.
+        ambient = round(t["profile"].ambient_at(elapsed), 2)
         progress = min(elapsed / route_seconds, 1.0) if route_seconds > 0 else 1.0
         lat, lon = interpolate(waypoints, progress)
         t["seq"] += 1
@@ -89,10 +91,10 @@ async def tracker_loop(client: TrackerClient, t: dict, waypoints, interval: floa
         try:
             if batch_size <= 1:
                 status = await client.send_reading(
-                    t["trackerId"], t["deviceKey"], temperature, lat, lon, recorded_at, t["seq"])
+                    t["trackerId"], t["deviceKey"], temperature, lat, lon, recorded_at, t["seq"], ambient)
             else:
                 buffer.append({"temperature": temperature, "lat": lat, "lon": lon,
-                               "recordedAt": recorded_at, "seq": t["seq"]})
+                               "recordedAt": recorded_at, "seq": t["seq"], "ambientTemp": ambient})
                 if len(buffer) >= batch_size:
                     status = await client.send_readings_batch(t["trackerId"], t["deviceKey"], buffer)
                     buffer = []

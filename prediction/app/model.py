@@ -23,6 +23,7 @@ MIN_WINDOW_SIZE = 5
 class ReadingPoint:
     ts: datetime
     temperature: float
+    ambient_temp: float | None = None  # M7 v2용 — v1은 무시
 
 
 @dataclass
@@ -34,7 +35,9 @@ class PredictionResult:
     model_version: str
 
 
-def predict(window: list[ReadingPoint], threshold_temp: float) -> PredictionResult:
+def predict(window: list[ReadingPoint], threshold_temp: float, context=None) -> PredictionResult:
+    # context(외기온·잔여거리)는 v1이 무시한다 — 시그니처만 M7에서 통일해 디스패처(main)가
+    # v1/v2를 같은 호출 규약으로 부를 수 있게 한다. v2-newton은 context를 실제로 사용.
     if len(window) < MIN_WINDOW_SIZE:
         return _no_breach(0.0)
 

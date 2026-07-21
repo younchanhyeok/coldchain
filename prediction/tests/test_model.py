@@ -72,6 +72,25 @@ def test_empty_window_does_not_crash():
     assert result.will_breach is False
 
 
+def test_v1_ignores_context_and_ambient_wiring(monkeypatch=None):
+    # M7 배선 회귀: context·per-point ambient가 채워져도 v1 판정은 불변이어야 한다
+    # (배선만 흘리고 v1은 무시 — PR5 v1 vs v2 비교의 공정성 전제).
+    w_plain = window([4.0, 5.0, 6.0, 7.0, 8.0])
+    w_with_ambient = [ReadingPoint(ts=p.ts, temperature=p.temperature, ambient_temp=25.0) for p in w_plain]
+
+    class _Ctx:
+        ambientTemp = 25.0
+        remainingDistanceMeters = 5000.0
+
+    baseline = predict(w_plain, threshold_temp=9.0)
+    wired = predict(w_with_ambient, threshold_temp=9.0, context=_Ctx())
+
+    assert wired.will_breach == baseline.will_breach
+    assert wired.slope_per_minute == pytest.approx(baseline.slope_per_minute, abs=1e-9)
+    assert wired.predicted_breach_at == baseline.predicted_breach_at
+    assert wired.model_version == baseline.model_version
+
+
 def test_predicted_breach_at_is_within_horizon():
     w = window([4.0, 5.0, 6.0, 7.0, 8.0])
     result = predict(w, threshold_temp=9.0)

@@ -49,7 +49,7 @@ class TrackServiceTest {
     private void persistReadings(List<Reading> readings) {
         readingBatchWriter.insertAll(readings.stream()
                 .map(r -> new NewReading(r.getTrackerId(), r.getRecordedAt(), r.getTemperature(),
-                        GeoPoints.lat(r.getPosition()), GeoPoints.lon(r.getPosition())))
+                        GeoPoints.lat(r.getPosition()), GeoPoints.lon(r.getPosition()), null))
                 .toList());
     }
 

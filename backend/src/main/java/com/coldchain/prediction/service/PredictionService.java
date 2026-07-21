@@ -1,5 +1,6 @@
 package com.coldchain.prediction.service;
 
+import com.coldchain.common.GeoPoints;
 import com.coldchain.ingest.event.ReadingRecordedEvent;
 import com.coldchain.prediction.domain.BreachEvent;
 import com.coldchain.prediction.domain.Prediction;
@@ -9,6 +10,7 @@ import com.coldchain.prediction.repository.BreachEventRepository;
 import com.coldchain.prediction.repository.PredictionRepository;
 import com.coldchain.reading.domain.Reading;
 import com.coldchain.reading.repository.ReadingRepository;
+import com.coldchain.shipment.service.ShipmentDistanceService;
 import java.time.Instant;
 import java.time.temporal.ChronoUnit;
 import java.util.Comparator;
@@ -44,6 +46,7 @@ public class PredictionService {
     private final BreachEventRepository breachEventRepository;
     private final ReadingRepository readingRepository;
     private final PredictionClient predictionClient;
+    private final ShipmentDistanceService shipmentDistanceService;
     private final ApplicationEventPublisher eventPublisher;
     private final TransactionTemplate transactionTemplate;
 
@@ -51,11 +54,13 @@ public class PredictionService {
 
     public PredictionService(PredictionRepository predictionRepository, BreachEventRepository breachEventRepository,
             ReadingRepository readingRepository, PredictionClient predictionClient,
+            ShipmentDistanceService shipmentDistanceService,
             ApplicationEventPublisher eventPublisher, TransactionTemplate transactionTemplate) {
         this.predictionRepository = predictionRepository;
         this.breachEventRepository = breachEventRepository;
         this.readingRepository = readingRepository;
         this.predictionClient = predictionClient;
+        this.shipmentDistanceService = shipmentDistanceService;
         this.eventPublisher = eventPublisher;
         this.transactionTemplate = transactionTemplate;
     }
@@ -111,11 +116,22 @@ public class PredictionService {
 
         List<PredictionClient.WindowPoint> window = recent.stream()
                 .sorted(Comparator.comparing(Reading::getRecordedAt))
-                .map(r -> new PredictionClient.WindowPoint(r.getRecordedAt(), r.getTemperature()))
+                .map(r -> new PredictionClient.WindowPoint(r.getRecordedAt(), r.getTemperature(), r.getAmbientTemp()))
                 .toList();
 
+        // v2 다변량 컨텍스트(M7): 최신 리딩의 외기온 + 목적지까지 남은 거리. v1은 무시하므로
+        // context가 채워져도 동작 불변. 거리 조회는 Python 호출과 같은 "트랜잭션 밖" 구간(단건 인덱스
+        // 조회라 커넥션을 오래 쥐지 않는다). recent는 최신순이라 [0]이 가장 최근 리딩.
+        Reading latest = recent.get(0);
+        Double remainingDistance = latest.getPosition() != null
+                ? shipmentDistanceService.remainingDistanceMeters(
+                        trackerId, GeoPoints.lat(latest.getPosition()), GeoPoints.lon(latest.getPosition()))
+                : null;
+        PredictionClient.Context context = new PredictionClient.Context(latest.getAmbientTemp(), remainingDistance);
+
         // Python 호출 — 트랜잭션 밖(최대 2s×2회 걸릴 수 있는 외부 I/O 동안 DB 커넥션을 쥐지 않는다).
-        Optional<PredictionClient.Result> resultOpt = predictionClient.predict(trackerId, event.thresholdTemp(), window);
+        Optional<PredictionClient.Result> resultOpt = predictionClient.predict(
+                trackerId, event.thresholdTemp(), window, context);
         if (resultOpt.isEmpty()) {
             return; // 예측 서버 장애·쿨다운 — 이번 리딩은 스킵(NFR-3: 수집·탐지엔 영향 없음)
         }

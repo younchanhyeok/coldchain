@@ -38,6 +38,11 @@ public class Reading {
     @Column(name = "server_ts", nullable = false, updatable = false)
     private Instant serverTs;
 
+    // 외기 센서값(M7 v2용, nullable). 쓰기는 ReadingBatchWriter가 담당하므로 여기선 읽기 매핑만 —
+    // 기존 4-인자 생성자(테스트 픽스처)는 이 값을 안 채우고 null로 둔다.
+    @Column(name = "ambient_temp")
+    private BigDecimal ambientTemp;
+
     protected Reading() {
     }
 
@@ -71,5 +76,9 @@ public class Reading {
 
     public Instant getServerTs() {
         return serverTs;
+    }
+
+    public BigDecimal getAmbientTemp() {
+        return ambientTemp;
     }
 }

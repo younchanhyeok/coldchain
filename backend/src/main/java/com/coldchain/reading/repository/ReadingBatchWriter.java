@@ -21,8 +21,8 @@ public class ReadingBatchWriter {
     // ON CONFLICT DO NOTHING: Kafka at-least-once 재전달·클라이언트 재시도로 같은
     // (tracker_id, recorded_at)이 다시 와도 조용히 멱등 처리(V10 유니크 제약 기반).
     private static final String INSERT_SQL = """
-            INSERT INTO reading (tracker_id, recorded_at, temperature, position, server_ts)
-            VALUES (?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326), ?)
+            INSERT INTO reading (tracker_id, recorded_at, temperature, position, server_ts, ambient_temp)
+            VALUES (?, ?, ?, ST_SetSRID(ST_MakePoint(?, ?), 4326), ?, ?)
             ON CONFLICT (tracker_id, recorded_at) DO NOTHING
             """;
 
@@ -44,6 +44,7 @@ public class ReadingBatchWriter {
             ps.setObject(4, reading.lon(), Types.DOUBLE);
             ps.setObject(5, reading.lat(), Types.DOUBLE);
             ps.setTimestamp(6, serverTs);
+            ps.setObject(7, reading.ambientTemp(), Types.NUMERIC); // null-safe, 컬럼은 NUMERIC(5,2)
         });
     }
 }
