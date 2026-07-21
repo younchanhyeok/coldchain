@@ -70,8 +70,27 @@ class SuddenFailureProfile(TemperatureProfile):
         return 4.0 if elapsed_seconds < self.failure_at_seconds else self.failure_ambient
 
 
+class PlateauProfile(TemperatureProfile):
+    """정체 — ambient가 상승하다 임계 바로 아래(ceiling)에서 점근한다. 실제 이탈은 없다.
+    v1(온도-시간 선형)은 상승 구간만 보고 임계 도달을 예측(구조적 오탐)하지만, v2(뉴턴 냉각)는
+    ambient≤threshold라 물리적으로 도달 불가로 판정한다 — v1 vs v2 오탐률 대비의 표적 시나리오.
+    ceiling 7.0은 기본 임계 8.0 대비 노이즈 σ0.15의 >6σ 마진이라 이탈이 사실상 불가능하다."""
+
+    name = "plateau"
+
+    def __init__(self, initial_temp: float = 5.0, cooling_rate: float = DEFAULT_COOLING_RATE,
+                 rise_per_minute: float = 0.3, ceiling: float = 7.0, rng: random.Random | None = None):
+        super().__init__(initial_temp, cooling_rate, rng)
+        self.rise_per_minute = rise_per_minute
+        self.ceiling = ceiling
+
+    def ambient_at(self, elapsed_seconds: float) -> float:
+        return min(4.0 + self.rise_per_minute * (elapsed_seconds / 60.0), self.ceiling)
+
+
 PROFILES = {
     NormalProfile.name: NormalProfile,
     GradualRiseProfile.name: GradualRiseProfile,
     SuddenFailureProfile.name: SuddenFailureProfile,
+    PlateauProfile.name: PlateauProfile,
 }
