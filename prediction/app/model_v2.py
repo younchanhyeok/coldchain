@@ -34,13 +34,15 @@ def predict(window: list[ReadingPoint], threshold_temp: float, context=None) -> 
         # 외기온 없음 → 물리 모델 불가. v1으로 폴백(modelVersion은 v1-linear로 정직하게).
         return v1.predict(window, threshold_temp, context=context)
 
-    # regime-trim: 최신 ambient와 다른 옛 점(냉동기 고장 전 데이터 등)을 버린다. ambient가 없는
-    # 점은 regime 판정 불가라 일단 남긴다(정상 운영에선 전 점에 ambient가 실린다).
+    # regime-trim: 최신 ambient와 같은 regime의 점만 남긴다. ambient가 없는 점(M7 배포 전 구
+    # 데이터·간헐 센서 결손)은 regime을 확인할 수 없으므로 **버린다** — 남겨서 fit에 넣으면 옛
+    # regime의 온도를 현재 ambient로 잘못 환산해 k·t0를 오염시킨다(전환 구간엔 ambient 실린 5점이
+    # 모일 때까지 침묵하는 게 정직하다).
     ordered = sorted(window, key=lambda p: p.ts)
     regime = [p for p in ordered
-              if p.ambient_temp is None or abs(p.ambient_temp - ambient) <= REGIME_EPS]
+              if p.ambient_temp is not None and abs(p.ambient_temp - ambient) <= REGIME_EPS]
     if len(regime) < MIN_WINDOW_SIZE:
-        return _no_breach()  # 새 regime 표본 부족 — 급변 직후엔 5점 모일 때까지 침묵
+        return _no_breach()  # 새/유효 regime 표본 부족 — 급변 직후·전환 구간엔 5점 모일 때까지 침묵
 
     latest = regime[-1]
 
@@ -90,11 +92,16 @@ def predict(window: list[ReadingPoint], threshold_temp: float, context=None) -> 
 
 
 def _current_ambient(window: list[ReadingPoint], context):
-    """현재 regime의 외기온 — context 스칼라(최신 상태)를 우선, 없으면 최신 리딩의 per-point ambient."""
-    if context is not None and getattr(context, "ambientTemp", None) is not None:
-        return context.ambientTemp
+    """현재 regime의 외기온 — 최신 리딩의 per-point ambient를 우선한다(그 점에 물리적으로 붙어
+    있는 값이라 regime 판정과 절대 어긋나지 않는다). 없으면 context 스칼라로 폴백. 둘 다 없으면
+    None → 호출부가 v1으로 폴백. (역순으로 context를 우선하면 stale한 context가 최신 regime을
+    통째로 trim시켜 이탈을 침묵시킬 수 있어 per-point를 신뢰한다.)"""
     latest = max(window, key=lambda p: p.ts)
-    return latest.ambient_temp
+    if latest.ambient_temp is not None:
+        return latest.ambient_temp
+    if context is not None:
+        return getattr(context, "ambientTemp", None)
+    return None
 
 
 def _no_breach() -> PredictionResult:

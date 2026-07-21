@@ -116,3 +116,25 @@ def test_already_breached_no_breach():
     w = newton_window(ambient=25.0, t0=9.0, k=0.05, n=8)  # 9도에서 시작, 임계 8 이미 초과
     result = model_v2.predict(w, threshold_temp=8.0, context=Ctx(ambientTemp=25.0))
     assert result.will_breach is False
+
+
+def test_none_ambient_old_points_excluded_from_fit():
+    # 전환 구간(M7 배포 경계): 앞 4점 ambient=None(구 데이터), 뒤 6점 ambient=25(신 데이터).
+    # None 점을 regime에서 버리므로 fit이 오염되지 않는다 — 신 regime 6점만으로 판정.
+    old_none = [ReadingPoint(ts=BASE + timedelta(minutes=i), temperature=2.0) for i in range(4)]
+    new = newton_window(ambient=25.0, t0=5.0, k=0.03, n=6)
+    for i, p in enumerate(new):
+        p.ts = BASE + timedelta(minutes=4 + i)  # 옛 구간 뒤로 이어붙임
+    result = model_v2.predict(old_none + new, threshold_temp=8.0, context=Ctx(ambientTemp=25.0))
+    # 오염 없이 신 regime(상승, ambient 25)만 봐서 이탈 예측
+    assert result.will_breach is True
+    assert result.model_version == "v2-newton"
+
+
+def test_none_ambient_below_min_window_stays_silent():
+    # 신 regime(ambient 실린) 점이 4개뿐 → None 옛 점을 버리면 MIN_WINDOW 미달 → 침묵.
+    old_none = [ReadingPoint(ts=BASE + timedelta(minutes=i), temperature=2.0) for i in range(6)]
+    new = [ReadingPoint(ts=BASE + timedelta(minutes=6 + i), temperature=6.0 + i * 0.3, ambient_temp=25.0)
+           for i in range(4)]
+    result = model_v2.predict(old_none + new, threshold_temp=8.0, context=Ctx(ambientTemp=25.0))
+    assert result.will_breach is False
