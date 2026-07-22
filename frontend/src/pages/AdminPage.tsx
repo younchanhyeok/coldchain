@@ -1,5 +1,6 @@
 import { Building2, Radio } from 'lucide-react'
-import { getAdminOverview, getPredictionMetrics, hasAdminKey } from '../api/adminMetrics'
+import { getAdminOverview, getEvaluationRuns, getPredictionMetrics, hasAdminKey } from '../api/adminMetrics'
+import { DashboardCard } from '../components/dashboard/DashboardCard'
 import { KpiTile } from '../components/dashboard/KpiTile'
 import { ReportExecutiveSummary } from '../components/report/ReportExecutiveSummary'
 import { ReportKpiCards } from '../components/report/ReportKpiCards'
@@ -23,6 +24,10 @@ export function AdminPage() {
     if (!hasAdminKey) return Promise.resolve(null)
     return getPredictionMetrics({ from: new Date(0).toISOString(), to: new Date().toISOString() })
   }, 30_000)
+  // 최신순 → [0]이 가장 최근 런. 여기선 "가장 최근 런 한 줄 요약"만 — v1/v2 나란히 비교·에피소드
+  // 상세는 리포트 탭이 소유한다(관리자 화면은 요약, 상세 흡수 금지).
+  const { data: runs } = usePolling(() => (hasAdminKey ? getEvaluationRuns(1) : Promise.resolve([])), 30_000)
+  const latestRun = runs?.[0] ?? null
   if (!hasAdminKey) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-body px-6 text-center text-sm text-neutral-500">
@@ -67,6 +72,33 @@ export function AdminPage() {
             hasValue={overview != null}
           />
         </div>
+
+        {latestRun && (
+          <DashboardCard title="최신 평가 런" meta="상세·모델 비교는 리포트 탭">
+            <div className="flex flex-wrap items-center gap-x-8 gap-y-2 text-sm">
+              <span className="text-neutral-400">
+                모델 <span className="text-neutral-200">{latestRun.modelVersion ?? '전체'}</span>
+              </span>
+              <span className="text-neutral-400">
+                적중률 <span className="text-neutral-200">{Math.round(latestRun.hitRate * 100)}%</span>
+              </span>
+              <span className="text-neutral-400">
+                오탐률 <span className="text-neutral-200">{Math.round(latestRun.falsePositiveRate * 100)}%</span>
+              </span>
+              <span className="text-neutral-400">
+                시각오차{' '}
+                <span className="text-neutral-200">
+                  {latestRun.avgBreachTimingErrorMinutes != null
+                    ? `${latestRun.avgBreachTimingErrorMinutes.toFixed(1)}분`
+                    : '—'}
+                </span>
+              </span>
+              <span className="ml-auto text-xs text-neutral-500">
+                {new Date(latestRun.createdAt).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })}
+              </span>
+            </div>
+          </DashboardCard>
+        )}
 
         {/* rescuedByPrediction은 GET /summary(화주별 스코프, JWT 필요)에서만 나온다 — 화주
             비의존 어드민 화면과 인가 축이 달라 여기선 집계하지 않는다(시스템 전체 합산 API가
