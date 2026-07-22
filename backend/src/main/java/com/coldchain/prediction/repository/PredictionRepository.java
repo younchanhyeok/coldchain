@@ -27,9 +27,10 @@ public interface PredictionRepository extends JpaRepository<Prediction, Long> {
     List<Prediction> findByCreatedAtBetween(Instant from, Instant to);
 
     /** 평가 런 자동화(M7) — 기간 내 존재하는 모델버전 목록. 버전별로 1건씩 스냅샷을 만든다.
-     *  반개구간 [from, to)로 스케줄 창 경계 중복을 피한다. */
+     *  경계는 getMetrics의 findByCreatedAtBetween(폐구간 [from,to])과 일치시킨다 — 버전 탐색과
+     *  지표 집계가 같은 창을 봐야 누락 없이 정합한다. */
     @Query("SELECT DISTINCT p.modelVersion FROM Prediction p "
-            + "WHERE p.createdAt >= :from AND p.createdAt < :to AND p.modelVersion IS NOT NULL")
+            + "WHERE p.createdAt >= :from AND p.createdAt <= :to AND p.modelVersion IS NOT NULL")
     List<String> findDistinctModelVersions(@Param("from") Instant from, @Param("to") Instant to);
 
     /** 평가지표의 missedBreaches 계산용 — breach_event와 매칭할 때는 생성 시각이 아니라

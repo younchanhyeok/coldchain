@@ -143,4 +143,17 @@ class EvaluationRunIntegrationTest {
         mockMvc.perform(get("/api/v1/admin/evaluation-runs"))
                 .andExpect(status().isUnauthorized());
     }
+
+    @Test
+    void rejectsManualRunWithFromAfterTo() throws Exception {
+        // 코드리뷰 반영: from > to는 무의미 스냅샷 행을 만들지 않고 422로 거절.
+        mockMvc.perform(post("/api/v1/admin/evaluation-runs")
+                        .header("X-Admin-Key", "test-admin-key")
+                        .contentType("application/json")
+                        .content("""
+                                {"from":"2026-07-22T05:00:00Z","to":"2026-07-22T04:00:00Z","modelVersion":"v2-newton"}
+                                """))
+                .andExpect(status().isUnprocessableEntity())
+                .andExpect(jsonPath("$.code").value("SEMANTIC_INVALID"));
+    }
 }
