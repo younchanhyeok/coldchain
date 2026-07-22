@@ -68,6 +68,16 @@ public class PredictionMetricsService {
         Double avgLeadTimeMinutes = average(leadTimesMinutes);
         Double medianLeadTimeMinutes = median(leadTimesMinutes);
 
+        // 예측 시각 오차 — 예측한 이탈 시각과 실제 이탈 시각의 절대 차(분). 적중(BREACHED)에
+        // predictedBreachAt·breachedAt가 모두 있는 경우만. 리드타임과 달리 부호 없이 "정확도"를 본다.
+        List<Long> timingErrorsMinutes = episodes.stream()
+                .filter(p -> p.getStatus() == PredictionStatus.BREACHED
+                        && p.getBreachedAt() != null && p.getPredictedBreachAt() != null)
+                .map(p -> Math.abs(Duration.between(p.getPredictedBreachAt(), p.getBreachedAt()).toMinutes()))
+                .sorted()
+                .toList();
+        Double avgBreachTimingErrorMinutes = average(timingErrorsMinutes);
+
         int missedBreaches = countMissedBreaches(from, to);
 
         Map<String, String> productNames = new HashMap<>();
@@ -80,7 +90,7 @@ public class PredictionMetricsService {
         return new PredictionMetricsResponse(
                 modelVersion, new Period(from, to), episodes.size(), truePositives, falsePositives, missedBreaches,
                 round(falsePositiveRate), round(hitRate), avgLeadTimeMinutes, medianLeadTimeMinutes,
-                episodeSummaries);
+                avgBreachTimingErrorMinutes, episodeSummaries);
     }
 
     /**

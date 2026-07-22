@@ -49,8 +49,10 @@ public class SecurityConfig {
                         // 디바이스 키(X-Device-Key)로 컨트롤러가 검사 — 같은 경로의 GET(조회, 화주
                         // 스코핑 대상)과 겹치므로 메서드로 구분해야 한다.
                         .requestMatchers(HttpMethod.POST, "/api/v1/trackers/*/readings").permitAll()
-                        // 어드민 키(X-Admin-Key)로 컨트롤러가 검사 — 엔드포인트 1~2개라 필터 승격은 과함.
+                        // 어드민 키(X-Admin-Key)로 컨트롤러가 검사 — 필터는 경로만 통과시키고 키 검증은
+                        // 컨트롤러가 한다. GET(지표·평가런 조회) + POST(평가런 수동 생성, M7).
                         .requestMatchers(HttpMethod.GET, "/api/v1/admin/**").permitAll()
+                        .requestMatchers(HttpMethod.POST, "/api/v1/admin/**").permitAll()
                         // metrics·prometheus는 M6 부하테스트 계측용 — 로컬 docker-compose 전용
                         // 배포(D3)라 외부 노출면이 없다. 공개 배포로 바뀌면 어드민 키 검사 승격 필요.
                         .requestMatchers(HttpMethod.GET, "/actuator/health", "/actuator/metrics/**",

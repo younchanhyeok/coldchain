@@ -7,6 +7,7 @@ import org.springframework.context.annotation.Bean;
 import org.springframework.context.annotation.Configuration;
 import org.springframework.scheduling.annotation.AsyncConfigurer;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
+import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
 /**
  * (@)Async 실행기 2종 — 기본 SimpleAsyncTaskExecutor(호출마다 새 스레드)는 M6 부하테스트에서
@@ -31,6 +32,19 @@ public class AsyncConfig implements AsyncConfigurer {
 
     public AsyncConfig(MeterRegistry meterRegistry) {
         this.meterRegistry = meterRegistry;
+    }
+
+    /**
+     * @Scheduled 전용 스케줄러 — 기본은 단일 스레드라 매시 평가 런 스냅샷(getMetrics 집계)이
+     * SseBroadcaster.flushReadings(1초 주기 SSE 방출)·heartbeat·예측 EXPIRE와 같은 스레드에서
+     * 순차 실행돼, 무거운 잡 하나가 실시간 방출을 스톨시킨다. 풀로 분리해 서로 독립시킨다.
+     */
+    @Bean
+    public ThreadPoolTaskScheduler taskScheduler() {
+        ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
+        scheduler.setPoolSize(3); // flush(1s) + heartbeat/expire + 시간당 스냅샷이 서로 안 막게
+        scheduler.setThreadNamePrefix("sched-");
+        return scheduler;
     }
 
     /** 기본 풀 — 탐지·알림·SSE 적재·예측 무효화 등 짧은 DB/Redis 작업(수 ms). */
