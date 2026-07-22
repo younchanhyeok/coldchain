@@ -50,7 +50,17 @@ export function ReportModelComparison({ runs }: ReportModelComparisonProps) {
     run ? value(run) : '런 없음'
 
   return (
-    <DashboardCard title="모델 비교 (v1 vs v2)" meta="각 모델의 최신 평가 런 기준">
+    <DashboardCard
+      title="모델 비교 (v1 vs v2)"
+      meta="각 모델의 최신 평가 런 기준"
+      footer={
+        <p className="text-xs text-neutral-500">
+          ※ 두 런은 서로 다른 기간·시나리오의 최신 스냅샷이라 통제된 1:1 비교가 아니다(모델은
+          프로세스 단위 토글이라 한 창에 한 모델만 돈다). 같은 시나리오·시드로 짝지은 통제 비교는
+          개발정리_M7의 v1 vs v2 리포트를 따른다.
+        </p>
+      }
+    >
       <table className="w-full text-left text-[15px]">
         <thead>
           <tr className="text-sm text-neutral-500">

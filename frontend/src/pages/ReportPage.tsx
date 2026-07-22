@@ -34,7 +34,8 @@ export function ReportPage() {
     () => (hasAdminKey ? getEvaluationRuns(20) : Promise.resolve([])),
     30_000,
   )
-  const selectedRun = selectedRunId != null ? (runs ?? []).find((r) => r.id === selectedRunId) ?? null : null
+  const runList = runs ?? []
+  const selectedRun = selectedRunId != null ? runList.find((r) => r.id === selectedRunId) ?? null : null
 
   // from/to는 실시간 모드에서만 폴링 틱마다 새로 계산한다(열어둔 뒤 생긴 에피소드 반영). 런 모드는
   // 과거 고정 창이라 재조회해도 값이 같다 — 폴링 간격을 1시간으로 늘려 사실상 멈춘다(불변 스냅샷).
@@ -53,7 +54,9 @@ export function ReportPage() {
       return getPredictionMetrics({ from: from.toISOString(), to: now.toISOString() })
     },
     selectedRun ? 60 * 60 * 1000 : 30_000,
-    [periodHours, selectedRunId],
+    // selectedRun의 해소 여부(≠selectedRunId)까지 deps에 넣는다 — 선택한 런이 폴링 갱신으로
+    // 최신 20개 밖으로 밀려 selectedRun이 null로 바뀌면 실시간(30초)으로 즉시 복귀하도록.
+    [periodHours, selectedRunId, selectedRun != null],
   )
   const { data: summary } = usePolling(() => getSummary(), 30_000)
 
@@ -92,12 +95,13 @@ export function ReportPage() {
             ))}
           </div>
           <select
-            value={selectedRunId ?? ''}
+            // 해소된 런이 없으면(만료·목록 밖) '실시간'을 표시 — 상태의 유령 선택이 UI에 남지 않게.
+            value={selectedRun ? selectedRunId ?? '' : ''}
             onChange={(e) => setSelectedRunId(e.target.value ? Number(e.target.value) : null)}
             className="rounded-md border border-border bg-card px-2 py-1.5 text-xs text-neutral-300"
           >
             <option value="">실시간 (프리셋 기간)</option>
-            {(runs ?? []).map((run) => (
+            {runList.map((run) => (
               <option key={run.id} value={run.id}>
                 {formatRunLabel(run)}
               </option>
@@ -111,7 +115,7 @@ export function ReportPage() {
 
       <ReportKpiCards metrics={metrics} rescuedByPrediction={summary?.rescuedByPrediction ?? null} />
       <ReportExecutiveSummary metrics={metrics} />
-      <ReportModelComparison runs={runs ?? []} />
+      <ReportModelComparison runs={runList} />
       <ReportScenarioTable episodes={metrics?.episodes ?? []} />
       <ReportRescueChart episodes={metrics?.episodes ?? []} />
     </div>
