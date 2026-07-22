@@ -14,6 +14,9 @@ public record PredictionMetricsResponse(
         double hitRate,
         Double avgLeadTimeMinutes,
         Double medianLeadTimeMinutes,
+        // M7: |예측 시각 − 실제 이탈 시각| 평균(BREACHED 한정) — "얼마나 정확히 맞췄나".
+        // 리드타임(얼마나 앞섰나)과 별개 축. v1 vs v2 비교의 핵심 지표.
+        Double avgBreachTimingErrorMinutes,
         List<EpisodeSummary> episodes) {
 
     public record Period(Instant from, Instant to) {
