@@ -102,9 +102,12 @@ class EvaluationRunIntegrationTest {
     void scheduledSnapshotIsIdempotentForSameWindow() throws Exception {
         String tracker = "TRK-EVAL-2";
         seedTracker(tracker);
-        Instant from = Instant.now().minus(30, ChronoUnit.MINUTES);
-        Instant to = Instant.now().plus(30, ChronoUnit.MINUTES);
-        Instant created = Instant.now();
+        // µs 절삭 — DB(timestamptz, µs)에서 읽어온 periodStart와 인메모리 from을 equals로 비교하므로,
+        // Instant.now()의 나노초가 라운드트립에서 잘려 어긋나지 않게 미리 맞춘다(Linux CI에서만 나노초).
+        Instant now = Instant.now().truncatedTo(ChronoUnit.MICROS);
+        Instant from = now.minus(30, ChronoUnit.MINUTES);
+        Instant to = now.plus(30, ChronoUnit.MINUTES);
+        Instant created = now;
         breachedPrediction(tracker, "v1-linear", created, created.plus(5, ChronoUnit.MINUTES),
                 created.plus(6, ChronoUnit.MINUTES));
 
