@@ -1,36 +1,59 @@
 import { useState } from 'react'
-import { getPredictionMetrics, hasAdminKey } from '../api/adminMetrics'
+import { getEvaluationRuns, getPredictionMetrics, hasAdminKey } from '../api/adminMetrics'
 import { getSummary } from '../api/summary'
 import { ReportExecutiveSummary } from '../components/report/ReportExecutiveSummary'
 import { ReportKpiCards } from '../components/report/ReportKpiCards'
+import { ReportModelComparison } from '../components/report/ReportModelComparison'
 import { ReportRescueChart } from '../components/report/ReportRescueChart'
 import { ReportScenarioTable } from '../components/report/ReportScenarioTable'
+import type { EvaluationRun } from '../types/adminMetrics'
 import { usePolling } from '../hooks/usePolling'
 
-// "달력 기간" 선택은 정직하지 않다 — 데이터가 시뮬레이터 실행 시점에만 존재하고, 아직 "평가 런"을
-// 별도로 기록하는 백엔드 개념이 없다(화면_탭_구성.md). 그래서 임의 날짜 범위 대신 대시보드
-// 온도 차트와 같은 프리셋 버튼 방식을 쓴다 — null은 "전체 기간"(처음부터 지금까지).
+// "달력 기간" 선택은 정직하지 않다 — 데이터가 시뮬레이터 실행 시점에만 존재하고, 실시간 조회는
+// 대시보드 온도 차트와 같은 프리셋 버튼 방식을 쓴다(null = "전체 기간"). "평가 런"을 선택하면
+// 그 런이 고정한 기간·모델버전의 스냅샷 창을 대신 조회한다(M7 — 아래 셀렉터).
 const PERIOD_OPTIONS: { label: string; hours: number | null }[] = [
   { label: '최근 1시간', hours: 1 },
   { label: '최근 24시간', hours: 24 },
   { label: '전체 기간', hours: null },
 ]
 
+const formatRunLabel = (run: EvaluationRun) => {
+  const version = run.modelVersion ?? '전체'
+  const tag = run.label ?? (run.triggerType === 'SCHEDULED' ? '정시' : '수동')
+  const when = new Date(run.periodEnd).toLocaleString('ko-KR', { dateStyle: 'short', timeStyle: 'short' })
+  return `${version} · ${tag} · ~${when}`
+}
+
 export function ReportPage() {
   const [periodHours, setPeriodHours] = useState<number | null>(null)
+  // null = 실시간(프리셋) 모드. 값이 있으면 그 평가 런의 불변 스냅샷 창을 본다.
+  const [selectedRunId, setSelectedRunId] = useState<number | null>(null)
 
-  // from/to는 폴링 틱마다 새로 계산한다 — useMemo로 밖에서 고정하면 30초 폴링이 페이지를
-  // 연 시점의 창을 반복 조회해, 열어둔 뒤 생긴 새 에피소드가 프리셋을 다시 누르기 전까지
-  // 안 보인다.
+  const { data: runs } = usePolling(
+    () => (hasAdminKey ? getEvaluationRuns(20) : Promise.resolve([])),
+    30_000,
+  )
+  const selectedRun = selectedRunId != null ? (runs ?? []).find((r) => r.id === selectedRunId) ?? null : null
+
+  // from/to는 실시간 모드에서만 폴링 틱마다 새로 계산한다(열어둔 뒤 생긴 에피소드 반영). 런 모드는
+  // 과거 고정 창이라 재조회해도 값이 같다 — 폴링 간격을 1시간으로 늘려 사실상 멈춘다(불변 스냅샷).
   const { data: metrics, error } = usePolling(
     () => {
       if (!hasAdminKey) return Promise.resolve(null)
+      if (selectedRun) {
+        return getPredictionMetrics({
+          from: selectedRun.periodStart,
+          to: selectedRun.periodEnd,
+          modelVersion: selectedRun.modelVersion ?? undefined,
+        })
+      }
       const now = new Date()
       const from = periodHours == null ? new Date(0) : new Date(now.getTime() - periodHours * 60 * 60 * 1000)
       return getPredictionMetrics({ from: from.toISOString(), to: now.toISOString() })
     },
-    30_000,
-    [periodHours],
+    selectedRun ? 60 * 60 * 1000 : 30_000,
+    [periodHours, selectedRunId],
   )
   const { data: summary } = usePolling(() => getSummary(), 30_000)
 
@@ -50,27 +73,45 @@ export function ReportPage() {
   return (
     <div className="flex flex-col gap-6">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div className="flex gap-1">
-          {PERIOD_OPTIONS.map((opt) => (
-            <button
-              key={opt.label}
-              type="button"
-              className={`rounded-md px-3 py-1.5 text-xs ${
-                periodHours === opt.hours ? 'bg-primary/20 text-primary' : 'text-neutral-500 hover:bg-card-hover'
-              }`}
-              onClick={() => setPeriodHours(opt.hours)}
-            >
-              {opt.label}
-            </button>
-          ))}
+        <div className="flex flex-wrap items-center gap-2">
+          <div className="flex gap-1">
+            {PERIOD_OPTIONS.map((opt) => (
+              <button
+                key={opt.label}
+                type="button"
+                disabled={selectedRun != null}
+                className={`rounded-md px-3 py-1.5 text-xs disabled:opacity-40 ${
+                  periodHours === opt.hours && selectedRun == null
+                    ? 'bg-primary/20 text-primary'
+                    : 'text-neutral-500 hover:bg-card-hover'
+                }`}
+                onClick={() => setPeriodHours(opt.hours)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+          <select
+            value={selectedRunId ?? ''}
+            onChange={(e) => setSelectedRunId(e.target.value ? Number(e.target.value) : null)}
+            className="rounded-md border border-border bg-card px-2 py-1.5 text-xs text-neutral-300"
+          >
+            <option value="">실시간 (프리셋 기간)</option>
+            {(runs ?? []).map((run) => (
+              <option key={run.id} value={run.id}>
+                {formatRunLabel(run)}
+              </option>
+            ))}
+          </select>
         </div>
         <span className="text-xs text-neutral-500">
-          {metrics?.modelVersion ?? 'v1-linear'} 기준 · M7에서 v2 모델과 비교 예정
+          {metrics?.modelVersion ?? '—'} 기준 · {selectedRun ? '평가 런 스냅샷' : '실시간'}
         </span>
       </div>
 
       <ReportKpiCards metrics={metrics} rescuedByPrediction={summary?.rescuedByPrediction ?? null} />
       <ReportExecutiveSummary metrics={metrics} />
+      <ReportModelComparison runs={runs ?? []} />
       <ReportScenarioTable episodes={metrics?.episodes ?? []} />
       <ReportRescueChart episodes={metrics?.episodes ?? []} />
     </div>

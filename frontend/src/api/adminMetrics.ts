@@ -1,6 +1,6 @@
 import { apiGet } from './client'
 import type { AdminOverviewResponse } from '../types/adminOverview'
-import type { PredictionMetricsResponse } from '../types/adminMetrics'
+import type { EvaluationRun, PredictionMetricsResponse } from '../types/adminMetrics'
 
 // 어드민 전용 엔드포인트라 X-Admin-Key가 필요하다(백엔드 기본값은 미설정=항상 401).
 // JWT 개념이 없는 별도 인증 축이라 skipAuth로 Authorization 자동 주입·refresh 재시도를 건너뛴다.
@@ -26,6 +26,14 @@ export function getPredictionMetrics(params: {
 
 export function getAdminOverview(): Promise<AdminOverviewResponse> {
   return apiGet<AdminOverviewResponse>('/api/v1/admin/overview', undefined, {
+    skipAuth: true,
+    headers: ADMIN_KEY ? { 'X-Admin-Key': ADMIN_KEY } : {},
+  })
+}
+
+/** 최신순 평가 런 목록 — 리포트 탭의 런 셀렉터와 v1/v2 비교 카드가 쓴다. */
+export function getEvaluationRuns(limit = 20): Promise<EvaluationRun[]> {
+  return apiGet<EvaluationRun[]>('/api/v1/admin/evaluation-runs', { limit }, {
     skipAuth: true,
     headers: ADMIN_KEY ? { 'X-Admin-Key': ADMIN_KEY } : {},
   })
