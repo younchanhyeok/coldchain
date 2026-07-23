@@ -116,8 +116,17 @@ def run_profiles(sim_python: str, args, seed: int, logf) -> None:
             "--target", args.target, "--email", args.email, "--password", args.password,
         ]
         procs.append(subprocess.Popen(cmd, cwd=SCRIPT_DIR, stdout=logf, stderr=subprocess.STDOUT))
-    for p in procs:
-        p.wait()
+    # 종료 코드를 확인한다 — run.py가 조용히 실패(로그인 오류·크래시)하면 그 프로파일 데이터가
+    # 통째로 빠진 채 스냅샷이 만들어져 비교가 오염된다. 행(hang)에도 대비해 넉넉한 타임아웃 후 kill.
+    for prof, p in zip(PROFILES, procs):
+        try:
+            code = p.wait(timeout=duration * 2 + 120)
+        except subprocess.TimeoutExpired:
+            p.kill()
+            p.wait()
+            code = -1
+        if code != 0:
+            log(f"  경고: run.py [{prof}] 비정상 종료(code={code}) — 이 프로파일 데이터 누락 가능")
 
 
 def drain_active(base: str, key: str, from_ts: str, model_version: str, cap_seconds: float) -> int:
@@ -127,8 +136,14 @@ def drain_active(base: str, key: str, from_ts: str, model_version: str, cap_seco
     deadline = time.monotonic() + cap_seconds
     last = -1
     while time.monotonic() < deadline:
-        m = admin_get(base, key, "/api/v1/admin/metrics/prediction",
-                      {"from": from_ts, "to": now_iso(), "modelVersion": model_version})
+        try:
+            m = admin_get(base, key, "/api/v1/admin/metrics/prediction",
+                          {"from": from_ts, "to": now_iso(), "modelVersion": model_version})
+        except (urllib.error.URLError, OSError) as e:
+            # 드레인 폴 중 일시적 백엔드 오류(바쁨·순간 끊김)로 2시간 런 전체를 죽이지 않는다.
+            log(f"  드레인 폴 일시 오류(무시하고 재시도): {e}")
+            time.sleep(20.0)
+            continue
         active = sum(1 for e in m.get("episodes", []) if e.get("status") == "ACTIVE")
         if active != last:
             log(f"  드레인 대기: ACTIVE {active}건")
@@ -208,11 +223,13 @@ def build_markdown(results: list, args) -> str:
     def agg(mv: str, field: str):
         return avg([r["run"][field] for r in rows(mv)])
 
+    # 실제 실행된 rep 수 — --start-rep로 일부만 이어받아 돌리면 args.reps보다 적다(과대 표기 금지).
+    actual_reps = len({r["rep"] for r in results})
     lines = [
         "# M7 예측 모델 비교 — v1-linear vs v2-newton",
         "",
         f"- 실행: {now_iso()}",
-        f"- 설정: {args.reps} reps × {len(PROFILES)} 프로파일 × {args.trackers} 트래커, "
+        f"- 설정: {actual_reps} reps × {len(PROFILES)} 프로파일 × {args.trackers} 트래커, "
         f"경로 {args.route_minutes}분, 임계 8.0℃",
         f"- 페이즈별 시드 짝지음(v1·v2 동일 곡선), 프로파일: {', '.join(PROFILES)}",
         "",
@@ -274,6 +291,8 @@ def main():
     parser.add_argument("--email", default="shipper-a@coldchain.local")
     parser.add_argument("--password", default="coldchain-a")
     args = parser.parse_args()
+    if not (0 <= args.start_rep < args.reps):
+        parser.error("--start-rep는 0 이상 --reps 미만이어야 합니다(빈 실행 방지)")
     args.pred_dir = os.path.abspath(args.pred_dir)
 
     os.makedirs(REPORTS_DIR, exist_ok=True)
