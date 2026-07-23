@@ -4,7 +4,9 @@ services:
     # "한 DB에 시계열 hypertable + 공간"을 그대로 유지한다. 데이터 디렉터리가 표준 postgres와
     # 달라(/home/postgres/pgdata) 볼륨 이름도 timescale_data로 바꿨다 — 구(postgis) 볼륨을
     # 그대로 마운트하면 에러 없이 빈 DB로 initdb되는 무음 사고가 나므로 이름으로 구조적으로 차단.
-    image: timescale/timescaledb-ha:pg16
+    # 재현성(M8): 태그는 사람용 버전 표기, @sha256 digest가 실제로 pull을 고정한다(태그 드리프트 무력화).
+    # 현재 고정본 = PostgreSQL 16.14 + TimescaleDB 2.28.2 + PostGIS. 갱신 시 digest도 함께 바꾼다.
+    image: timescale/timescaledb-ha:pg16.14-ts2.28.2@sha256:c22124ddb1c499486c6d703f9942b1c17eaa0f2cd25de7bc0648927c504cf82a
     # timescaledb는 반드시 preload, pg_stat_statements는 부하테스트 top query 캡처용.
     # CREATE EXTENSION은 Flyway(V1 postgis, V11 timescaledb)가 하고, pg_stat_statements만
     # loadtest.sh가 실행마다 보장한다(fresh 볼륨에서 사라지므로).
@@ -24,7 +26,8 @@ services:
       retries: 10
 
   redis:
-    image: redis:7-alpine
+    # 재현성(M8): 고정본 = Redis 7.4.9-alpine. digest가 pull을 고정.
+    image: redis:7.4.9-alpine@sha256:6ab0b6e7381779332f97b8ca76193e45b0756f38d4c0dcda72dbb3c32061ab99
     ports:
       - "${REDIS_PORT:-6379}:6379"
     healthcheck:

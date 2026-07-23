@@ -5,11 +5,16 @@ import com.coldchain.reading.domain.ReadingId;
 import java.time.Instant;
 import java.util.List;
 import org.springframework.data.domain.Pageable;
-import org.springframework.data.jpa.repository.JpaRepository;
+import org.springframework.data.repository.Repository;
 
 // 키 타입이 ReadingId(복합키) — hypertable 전환(V11)으로 (id, recorded_at) PK가 됐다.
 // 조회는 전부 tracker_id+recorded_at 파생 쿼리라 findById(단일 키)를 쓰는 곳이 없어 무영향.
-public interface ReadingRepository extends JpaRepository<Reading, ReadingId> {
+//
+// 읽기 전용 계약(M8): 쓰기는 전부 ReadingBatchWriter(JDBC)를 거친다 — Reading은 복합키+DEFAULT
+// nextval 채번이라 JPA로 쓸 수 없는(읽기 전용 @Entity) 설계다. JpaRepository를 상속하면 save/delete
+// 류가 표면에 노출돼 실수로 JPA 쓰기 경로가 생길 수 있으므로, 최소 read 메서드만 선언하는
+// Repository 베이스로 좁혀 "이 리포지토리로는 못 쓴다"를 타입으로 보장한다.
+public interface ReadingRepository extends Repository<Reading, ReadingId> {
 
     /** 폐구간 [from, to] — 배송 시간창처럼 상한 시각의 리딩도 창에 속하는 조회용(ConsigneeTrack). */
     List<Reading> findByTrackerIdAndRecordedAtBetweenOrderByRecordedAtDesc(

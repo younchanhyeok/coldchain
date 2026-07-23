@@ -16,6 +16,10 @@ import org.springframework.transaction.annotation.Transactional;
 public class MagicLinkService {
 
     private static final SecureRandom RANDOM = new SecureRandom();
+    // 완료 후 유효 기간. ⚠ 이 값은 원시 reading 보존(V12: 8일)보다 작아야 한다 — 수령기관 온도 로그
+    // (ConsigneeTrackService)는 배송 창의 최신 리딩 꼬리를 원시에서 읽는데, 링크 유효 동안 그 꼬리
+    // (deliveredAt 근처)가 보존 창(8일) 안에 있어야 잘리지 않는다. 이 값을 8일 이상으로 늘리려면
+    // 그 로그를 다운샘플 CAgg(reading_1m, 30일)로 전환해야 한다.
     private static final Duration EXPIRY_AFTER_DELIVERY = Duration.ofDays(7);
 
     private final MagicLinkTokenRepository magicLinkTokenRepository;
