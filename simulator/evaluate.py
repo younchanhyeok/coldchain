@@ -5,7 +5,7 @@
 모델 토글로 두 번(짝지은 시드) 실행해 페이즈별 지표 스냅샷을 남기고 대조한다.
 
 한 rep의 흐름:
-  페이즈 A = PREDICTION_MODEL=v1 예측서버 기동 → 4프로파일 동시 주행 → ACTIVE 예측 드레인 →
+  페이즈 A = PREDICTION_MODEL=v1 예측서버 기동 → 프로파일 동시 주행 → ACTIVE 예측 드레인 →
              수동 평가 런 스냅샷(모델버전 v1-linear 필터) → 예측서버 종료
   페이즈 B = 같은 시드로 v2(v2-newton) 반복 (곡선 동일 = 짝지은 비교)
 rep마다 시드를 바꿔 여러 번 반복(안정성 예시 — 통계적 유의성 주장 아님).
@@ -189,7 +189,7 @@ def run_phase(args, model_env: str, model_version: str, rep: int, seed: int, log
         time.sleep(args.circuit_wait)
 
         from_ts = now_iso()
-        log(f"[rep{rep}] {model_version} 4프로파일 주행 시작 ({args.route_minutes}분 경로)")
+        log(f"[rep{rep}] {model_version} {len(args.profile_list)}프로파일 주행 시작 ({args.route_minutes}분 경로)")
         run_profiles(args.sim_python, args, seed, logf)
         log(f"[rep{rep}] {model_version} 주행 종료 — ACTIVE 드레인")
         remaining = drain_active(args.target, args.admin_key, from_ts, model_version, args.drain_cap)
@@ -199,7 +199,8 @@ def run_phase(args, model_env: str, model_version: str, rep: int, seed: int, log
 
         run = admin_post(args.target, args.admin_key, "/api/v1/admin/evaluation-runs",
                          {"from": from_ts, "to": to_ts,
-                          "label": f"m7-rep{rep}-{model_version}", "modelVersion": model_version})
+                          "label": f"{args.label_prefix}-rep{rep}-{model_version}",
+                          "modelVersion": model_version})
         metrics = admin_get(args.target, args.admin_key, "/api/v1/admin/metrics/prediction",
                             {"from": from_ts, "to": to_ts, "modelVersion": model_version})
         log(f"[rep{rep}] {model_version} 런 저장 #{run['id']} — "
@@ -282,6 +283,8 @@ def main():
     parser.add_argument("--base-seed", type=int, default=42, help="rep 0 시드(rep r = base+r)")
     parser.add_argument("--profiles", default=DEFAULT_PROFILES,
                         help=f"쉼표 구분 프로파일 목록(기본: 전체 = {DEFAULT_PROFILES})")
+    parser.add_argument("--label-prefix", default="bench",
+                        help="수동 평가 런 라벨 접두(기본 bench) — 마일스톤별로 m7/m8 등 구분용")
     parser.add_argument("--trackers", type=int, default=10, help="프로파일당 트래커 수")
     parser.add_argument("--interval", type=float, default=5.0, help="전송 주기(초)")
     parser.add_argument("--route-minutes", type=float, default=15.0, help="경로 주파(분) = 페이즈 길이")
@@ -302,11 +305,16 @@ def main():
     unknown = [p for p in args.profile_list if p not in PROFILE_REGISTRY]
     if unknown or not args.profile_list:
         parser.error(f"--profiles에 미지 프로파일: {unknown} (가능: {DEFAULT_PROFILES})")
+    # slow-rise는 임계 도달이 ~27분 — 경로가 그보다 짧으면 이탈이 경로 안에 안 들어와 예측이 전부
+    # 오탐(FP)으로 집계되어 비교가 조용히 오염된다. 스모크(짧은 경로)는 허용하되 크게 경고한다.
+    if "slow-rise" in args.profile_list and args.route_minutes < 28:
+        log(f"⚠ 경고: slow-rise는 임계 도달 ~27분인데 --route-minutes={args.route_minutes}(<28)라 "
+            f"이탈이 경로 안에 안 들어온다 → slow-rise 예측이 전부 FP로 집계됨. 비교 목적이면 30+ 권장.")
     args.pred_dir = os.path.abspath(args.pred_dir)
 
     os.makedirs(REPORTS_DIR, exist_ok=True)
     stamp = datetime.now().strftime("%Y%m%d-%H%M%S")
-    log_path = os.path.join(REPORTS_DIR, f"m7-compare-{stamp}.log")
+    log_path = os.path.join(REPORTS_DIR, f"compare-{stamp}.log")
     logf = open(log_path, "w")
     log(f"로그: {log_path}")
 
@@ -330,11 +338,11 @@ def main():
             elapsed = (time.monotonic() - start) / 60.0
             log(f"진행 {done}/{total} 페이즈 완료 (누적 {elapsed:.1f}분)")
             # 중간 산출물 저장 — 중단돼도 여기까지는 남는다.
-            with open(os.path.join(REPORTS_DIR, f"m7-compare-{stamp}.json"), "w") as f:
+            with open(os.path.join(REPORTS_DIR, f"compare-{stamp}.json"), "w") as f:
                 json.dump(results, f, ensure_ascii=False, indent=2)
 
     md = build_markdown(results, args)
-    md_path = os.path.join(REPORTS_DIR, f"m7-compare-{stamp}.md")
+    md_path = os.path.join(REPORTS_DIR, f"compare-{stamp}.md")
     with open(md_path, "w") as f:
         f.write(md)
     logf.close()
