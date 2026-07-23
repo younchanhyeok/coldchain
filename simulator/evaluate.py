@@ -38,7 +38,10 @@ from datetime import datetime, timezone
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 REPORTS_DIR = os.path.join(SCRIPT_DIR, "reports")
 
-PROFILES = ["normal", "gradual-rise", "sudden-failure", "plateau"]
+# 기본은 profiles.py의 전 프로파일(M7 4종 + M8 slow-rise/gentle-failure). --profiles로 부분 선택.
+from profiles import PROFILES as PROFILE_REGISTRY  # noqa: E402 (run.py와 같은 디렉터리 실행 전제)
+
+DEFAULT_PROFILES = ",".join(PROFILE_REGISTRY.keys())
 # 결과 modelVersion 문자열 → 예측서버 기동 env. v1/v2 각 모델이 응답에 자기 버전을 새기므로
 # 이 매핑이 "페이즈 env"와 "지표 필터"를 잇는다.
 MODELS = [("v1", "v1-linear"), ("v2", "v2-newton")]
@@ -107,7 +110,7 @@ def stop_prediction(proc: subprocess.Popen) -> None:
 def run_profiles(sim_python: str, args, seed: int, logf) -> None:
     duration = int(args.route_minutes * 60 + args.tail_seconds)
     procs = []
-    for prof in PROFILES:
+    for prof in args.profile_list:
         cmd = [
             sim_python, os.path.join(SCRIPT_DIR, "run.py"),
             "--profile", prof, "--trackers", str(args.trackers),
@@ -118,7 +121,7 @@ def run_profiles(sim_python: str, args, seed: int, logf) -> None:
         procs.append(subprocess.Popen(cmd, cwd=SCRIPT_DIR, stdout=logf, stderr=subprocess.STDOUT))
     # 종료 코드를 확인한다 — run.py가 조용히 실패(로그인 오류·크래시)하면 그 프로파일 데이터가
     # 통째로 빠진 채 스냅샷이 만들어져 비교가 오염된다. 행(hang)에도 대비해 넉넉한 타임아웃 후 kill.
-    for prof, p in zip(PROFILES, procs):
+    for prof, p in zip(args.profile_list, procs):
         try:
             code = p.wait(timeout=duration * 2 + 120)
         except subprocess.TimeoutExpired:
@@ -226,12 +229,12 @@ def build_markdown(results: list, args) -> str:
     # 실제 실행된 rep 수 — --start-rep로 일부만 이어받아 돌리면 args.reps보다 적다(과대 표기 금지).
     actual_reps = len({r["rep"] for r in results})
     lines = [
-        "# M7 예측 모델 비교 — v1-linear vs v2-newton",
+        "# 예측 모델 비교 — v1-linear vs v2-newton",
         "",
         f"- 실행: {now_iso()}",
-        f"- 설정: {actual_reps} reps × {len(PROFILES)} 프로파일 × {args.trackers} 트래커, "
+        f"- 설정: {actual_reps} reps × {len(args.profile_list)} 프로파일 × {args.trackers} 트래커, "
         f"경로 {args.route_minutes}분, 임계 8.0℃",
-        f"- 페이즈별 시드 짝지음(v1·v2 동일 곡선), 프로파일: {', '.join(PROFILES)}",
+        f"- 페이즈별 시드 짝지음(v1·v2 동일 곡선), 프로파일: {', '.join(args.profile_list)}",
         "",
         "## 종합 (rep 평균, 수동 평가 런 집계)",
         "",
@@ -251,7 +254,7 @@ def build_markdown(results: list, args) -> str:
         "| 프로파일 | 모델 | TP | FP | 적중률 | 평균 리드타임 |",
         "|---|---|---|---|---|---|",
     ]
-    for prof in PROFILES:
+    for prof in args.profile_list:
         for _, mv in MODELS:
             tp = sum(r["byProfile"].get(prof, {}).get("tp", 0) for r in rows(mv))
             fp = sum(r["byProfile"].get(prof, {}).get("fp", 0) for r in rows(mv))
@@ -277,6 +280,8 @@ def main():
     parser.add_argument("--start-rep", type=int, default=0,
                         help="시작 rep 인덱스 — 중단된 런 이어받기용(예: --start-rep 2 --reps 3 = rep2만)")
     parser.add_argument("--base-seed", type=int, default=42, help="rep 0 시드(rep r = base+r)")
+    parser.add_argument("--profiles", default=DEFAULT_PROFILES,
+                        help=f"쉼표 구분 프로파일 목록(기본: 전체 = {DEFAULT_PROFILES})")
     parser.add_argument("--trackers", type=int, default=10, help="프로파일당 트래커 수")
     parser.add_argument("--interval", type=float, default=5.0, help="전송 주기(초)")
     parser.add_argument("--route-minutes", type=float, default=15.0, help="경로 주파(분) = 페이즈 길이")
@@ -293,6 +298,10 @@ def main():
     args = parser.parse_args()
     if not (0 <= args.start_rep < args.reps):
         parser.error("--start-rep는 0 이상 --reps 미만이어야 합니다(빈 실행 방지)")
+    args.profile_list = [p.strip() for p in args.profiles.split(",") if p.strip()]
+    unknown = [p for p in args.profile_list if p not in PROFILE_REGISTRY]
+    if unknown or not args.profile_list:
+        parser.error(f"--profiles에 미지 프로파일: {unknown} (가능: {DEFAULT_PROFILES})")
     args.pred_dir = os.path.abspath(args.pred_dir)
 
     os.makedirs(REPORTS_DIR, exist_ok=True)

@@ -88,9 +88,38 @@ class PlateauProfile(TemperatureProfile):
         return min(4.0 + self.rise_per_minute * (elapsed_seconds / 60.0), self.ceiling)
 
 
+class SlowRiseProfile(GradualRiseProfile):
+    """완만한 상승(M8) — gradual-rise의 절반 기울기(0.15℃/min). 리드타임 축 표적:
+    기존 0.3/min은 30분 내 임계 도달이 빨라 경보가 이탈에 붙었고(M7 실측 리드타임 ~0),
+    L2 급변 감지도 자주 발화해 INVALIDATED 재발령 루프를 만들었다. 절반 기울기 + 30분 경로면
+    임계(8.0) 도달이 ~27분 — 예측이 수 분 앞서 경고할 시간축이 생긴다."""
+
+    name = "slow-rise"
+
+    def __init__(self, initial_temp: float = 5.0, cooling_rate: float = DEFAULT_COOLING_RATE,
+                 rise_per_minute: float = 0.15, rng: random.Random | None = None):
+        super().__init__(initial_temp, cooling_rate, rise_per_minute, rng)
+
+
+class GentleFailureProfile(SuddenFailureProfile):
+    """완만한 고장(M8) — v2 재-activate(개선 b) 표적. 기존 sudden(25℃, τ=20s)은 고장→이탈이
+    ~14s(3점)라 v2가 새 국면 5점을 모으기 전에 "이미 초과" 가드에 걸려 침묵했다(M7 실측).
+    failure_ambient 11℃ + cooling_rate 0.02(τ=50s)면 고장→이탈 ≈ ln((11-4)/(11-8))/0.02 ≈ 42s
+    ≈ 8점 — 무효화 후 새 국면 5점으로 재적합해 이탈 전에 다시 경고할 수 있는 시간이 생긴다."""
+
+    name = "gentle-failure"
+
+    def __init__(self, initial_temp: float = 5.0, cooling_rate: float = 0.02,
+                 failure_at_seconds: float = 120.0, failure_ambient: float = 11.0,
+                 rng: random.Random | None = None):
+        super().__init__(initial_temp, cooling_rate, failure_at_seconds, failure_ambient, rng)
+
+
 PROFILES = {
     NormalProfile.name: NormalProfile,
     GradualRiseProfile.name: GradualRiseProfile,
     SuddenFailureProfile.name: SuddenFailureProfile,
     PlateauProfile.name: PlateauProfile,
+    SlowRiseProfile.name: SlowRiseProfile,
+    GentleFailureProfile.name: GentleFailureProfile,
 }
