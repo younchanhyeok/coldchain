@@ -102,7 +102,7 @@ python run.py --trackers 50 --interval 5 --profile normal --target http://localh
 - 온도 곡선은 물리 기반(뉴턴 냉각법칙)이어야 함 — 예측(FR-5) 검증의 전제이므로 임의 직선 금지.
 - 부하테스트(M6): `./loadtest.sh <trackers> [measure_s=300] [warmup_s=60]` — 동일 시뮬레이터를 asyncio 부하 발생기로 재사용(500|1000|5000). 워밍업 후 측정, SSE e2e·대시보드 조회 프로브 병행, 산출물은 `simulator/reports/`(gitignore). 비교 런은 fresh 볼륨(`down -v`)에서.
 
-## 마일스톤 (현재: M8)
+## 마일스톤 (현재: M8 완료 — 로드맵 완결)
 
 | # | 목표 | 완료 기준 |
 |---|---|---|
@@ -114,6 +114,6 @@ python run.py --trackers 50 --interval 5 --profile normal --target http://localh
 | M5 | 역할 멀티뷰 — JWT·매직링크·인가 스코핑 테스트 | 같은 배송을 역할별 다른 화면·범위로 조회 |
 | M6 | 스케일 — 부하테스트→Kafka·Timescale 전환 | 개선 전/후 수치 비교 리포트 |
 | M7 | 예측 심화 — 다변량·평가 자동화 | v1 vs v2 모델 수치 비교 (완료 — v2 오탐 0.67→0.03, 대가는 민감도, 기본값 v1 유지) |
-| M8 | (예정) M6 백로그 — 수평 확장 데모·natural-key PK·평가 런 다중 인스턴스 안전 | 미정 |
+| M8 | 서사 완결 — 하드닝·수평확장 능력·예측 벤치 재평가 | 완료 — v2 재-activate 증명(gentle-failure), 리드타임 지표 한계 규명, 기본값 v1 유지 |
 
 - 각 마일스톤 끝에 README·데모 GIF 갱신. 막힌 지점·해결 과정은 그때그때 `docs/`에 기록.
